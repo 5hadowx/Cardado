@@ -1,0 +1,226 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: CardTexts_en
+  m_EditorClassIdentifier: 
+  m_LocaleId:
+    m_Code: en
+  m_SharedData: {fileID: 11400000, guid: e57e65f9bfc856b4a90481cc992b267f, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 317287042424832
+    m_Localized: Knight
+    m_Metadata:
+      m_Items: []
+  - m_Id: 317439178219520
+    m_Localized: Opponent re-rolls one of their dice.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 317844498980864
+    m_Localized: Bodyguard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318033821474816
+    m_Localized: Protects one die (cannot be affected by card effects).
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318072924971008
+    m_Localized: Artist
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318294300336128
+    m_Localized: Steal one card from an opponent's hand. Stolen card must be played
+      right away.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318212704346112
+    m_Localized: Collector
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318134820315136
+    m_Localized: Re-roll one of your dice.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 319708602867712
+    m_Localized: Dice modifier
+    m_Metadata:
+      m_Items: []
+  - m_Id: 319965743063040
+    m_Localized: Choose one die, either your own or an opponent and apply a +1 or
+      -1 modifier.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322112295575552
+    m_Localized: Special Collector
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321988571996160
+    m_Localized: Special Artist
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321900101541888
+    m_Localized: Special Bodyguard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321386253164544
+    m_Localized: Special Knight
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321815577927680
+    m_Localized: 'Choose one:
+
+      -All opponents re-roll one die.
+
+      -One
+      opponent re-rolls all dice.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322199511932928
+    m_Localized: 'Choose one:
+
+      -Draw three cards from the deck. They go to
+      your hand and may be played in future turns.
+
+      -Steal one card from each
+      opponent. Choose one of those to play right away and discard the rest.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321961501958144
+    m_Localized: 'Choose one:
+
+      -Protect all of your dice (they cannot be affected
+      by card effects).
+
+      -Protect all dice of all players (they cannot be affected
+      by card effects). '
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322050706415616
+    m_Localized: 'Choose one:
+
+      -Pick any number of your dice and re-roll them.
+
+      -Re-roll
+      one of your dice three times and then pick one of those values to be the final
+      value of the die.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339569911570432
+    m_Localized: Mirror
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339628434694144
+    m_Localized: Swap one of your dice with an opponent's. You may keep the die for
+      later turns or play it straight away
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339649573986304
+    m_Localized: Executioner
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339696617299968
+    m_Localized: Prevent a rival from using cards this turn or cancel a persistent
+      card already used (persistent cards remain on the board after played, either
+      under the die they are affecting or on the side if they affect all dice).
+    m_Metadata:
+      m_Items: []
+  - m_Id: 342140713738240
+    m_Localized: Choose the effect of one of the cards' special variants (Knight,
+      Bodyguard, Artist, Collector).
+    m_Metadata:
+      m_Items: []
+  - m_Id: 342069817417728
+    m_Localized: Nobleman
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341813071486976
+    m_Localized: King
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341691809964032
+    m_Localized: Queen
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341627326734336
+    m_Localized: Joker
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341669487878144
+    m_Localized: 'Choose one:
+
+      -Turn one of your dice (1 <-> 6, 2 <-> 5, 3
+      <->4)
+
+      -Turn one of your opponent''s dice (1 <-> 6, 2 <-> 5, 3 <->4)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341774290952192
+    m_Localized: All players discard their hand and draw three new cards
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341978423533568
+    m_Localized: All players re-roll their dice
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448169212043264
+    m_Localized: Empty Artist
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448282235953152
+    m_Localized: No effect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448482186813440
+    m_Localized: Empty Knight
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448658095923200
+    m_Localized: No effect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448722029699072
+    m_Localized: No effect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448719395676160
+    m_Localized: Empty Bodyguard
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448990515486720
+    m_Localized: No effect
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448989898924032
+    m_Localized: Empty Collector
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138450980771454976
+    m_Localized: Special Executioner
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138451220140384256
+    m_Localized: Special Mirror
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138450988824518656
+    m_Localized: One opponent discards all cards in hand
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138451348448337920
+    m_Localized: Switch one of your dice with an opponent's die or choose one die
+      from two opponents and switch those
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

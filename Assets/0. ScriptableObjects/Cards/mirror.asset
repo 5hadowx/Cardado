@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a0aaf16e35d2314f8964270bf60c4c2, type: 3}
+  m_Name: mirror
+  m_EditorClassIdentifier: 
+  id: mirror
+  cardName:
+    m_TableReference:
+      m_TableCollectionName: CardTexts
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: card_mirror_name
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  cardDescription:
+    m_TableReference:
+      m_TableCollectionName: CardTexts
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: card_mirror_desc
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  cardType: 4
+  rarity: 1
+  artwork: {fileID: -3342743851459327484, guid: d9d641a2c672e744789b1f7b14650e3d, type: 3}
+  isBlankCard: 0
+  isModifier: 0
+  canAdd: 0
+  canSubtract: 0
+  isPersistent: 0
+  references:
+    version: 2
+    RefIds: []

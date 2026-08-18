@@ -1,0 +1,228 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e9620f8c34305754d8cc9a7e49e852d9, type: 3}
+  m_Name: CardTexts_es
+  m_EditorClassIdentifier: 
+  m_LocaleId:
+    m_Code: es
+  m_SharedData: {fileID: 11400000, guid: e57e65f9bfc856b4a90481cc992b267f, type: 2}
+  m_Metadata:
+    m_Items: []
+  m_TableData:
+  - m_Id: 317287042424832
+    m_Localized: Caballero
+    m_Metadata:
+      m_Items: []
+  - m_Id: 317439178219520
+    m_Localized: El rival lanza uno de sus dados nuevamente.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 317844498980864
+    m_Localized: Escolta
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318033821474816
+    m_Localized: Protege un dado (no puede ser afectado por efectos de cartas).
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318072924971008
+    m_Localized: Artista
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318294300336128
+    m_Localized: Roba una carta de la mano de un rival. La carta robada debe ser
+      jugada en el momento.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318212704346112
+    m_Localized: Coleccionista
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318134820315136
+    m_Localized: Lanza uno de tus dados nuevamente.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 319708602867712
+    m_Localized: Modificador de dados
+    m_Metadata:
+      m_Items: []
+  - m_Id: 319965743063040
+    m_Localized: Elige un dado, ya sea propio o de un rival, y aplicale un modificador
+      +1 o -1.
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322112295575552
+    m_Localized: Coleccionista Especial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321988571996160
+    m_Localized: Coleccionista Especial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321900101541888
+    m_Localized: Escolta Especial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321386253164544
+    m_Localized: Caballero Especial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321815577927680
+    m_Localized: 'Elige una:
+
+      -Todos los rivales lanzan un dado nuevamente.
+
+      -Un
+      rival lanza todos los dados nuevamente.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322199511932928
+    m_Localized: 'Elige una:
+
+      -Roba tres cartas del mazo. Las cartas van a
+      la mano del jugador para poder ser usadas en otro turno.
+
+      -Roba una carta
+      de cada oponente. Juega una de esas cartas en el momento y descarta el resto.'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321961501958144
+    m_Localized: 'Elige una:
+
+      -Protege todos tus dados (no pueden ser affectados
+      por efectos de cartas).
+
+      -Protege todos los dados de todos los jugadores
+      (no pueden ser affectados por efectos de cartas).'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322050706415616
+    m_Localized: 'Elige una:
+
+      -Elige cualquier cantidad de tus propios dados
+      y lanzalos nuevamente una vez.
+
+      -Elige uno de tus dados y lanzalo nuevamente
+      tres veces. Luego puedes quuedarte con el valor que desees de esos tres lanzamientos
+      para ser el valor final de ese dado'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339569911570432
+    m_Localized: Espejo
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339628434694144
+    m_Localized: Cambia uno de tus dados con el uno de los dados de un oponente.
+      Puedes guardar el dado obtenido para otro turno o puedes utilizarlo en este
+      turno
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339649573986304
+    m_Localized: Verdugo
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339696617299968
+    m_Localized: Evita que un rival juegue cartas este turno o anula una carta persistente
+      que ya este en juego (las cartas persistentes se quedan en la meza luego de
+      ser jugadas, ya sea debajo del dado al que afectan o en un costado en caso
+      de que su efecto se extienda a todos los dados).
+    m_Metadata:
+      m_Items: []
+  - m_Id: 342140713738240
+    m_Localized: Elige el efecto de la variante especial de las cartas (Caballero,
+      Escolta, Artista, Coleccionista)
+    m_Metadata:
+      m_Items: []
+  - m_Id: 342069817417728
+    m_Localized: Noble
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341813071486976
+    m_Localized: Rey
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341691809964032
+    m_Localized: Reina
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341627326734336
+    m_Localized: "Buf\xF3n"
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341669487878144
+    m_Localized: 'Elige una:
+
+      -Gira uno de tus dados (1 <-> 6, 2 <-> 5, 3 <->4)
+
+      -Gira
+      uno de los dados de tu oponente (1 <-> 6, 2 <-> 5, 3 <->4)'
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341774290952192
+    m_Localized: Todos los jugadores descartan su mano y reciben tres cartas nuevas
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341978423533568
+    m_Localized: Todos los jugadores lanzan sus dados nuevamente
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448169212043264
+    m_Localized: Artista vacio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448282235953152
+    m_Localized: Sin efecto
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448482186813440
+    m_Localized: Caballero vacio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448658095923200
+    m_Localized: Sin efecto
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448722029699072
+    m_Localized: Sin efecto
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448719395676160
+    m_Localized: Escolta vacio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448990515486720
+    m_Localized: Sin efecto
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448989898924032
+    m_Localized: Coleccionista vacio
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138450980771454976
+    m_Localized: Verdugo Especial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138451220140384256
+    m_Localized: Espejo Especial
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138450988824518656
+    m_Localized: Un rival descarta su mano
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138451348448337920
+    m_Localized: Intercambia un dado con un rival o un dado entre dos rivales
+    m_Metadata:
+      m_Items: []
+  references:
+    version: 2
+    RefIds: []

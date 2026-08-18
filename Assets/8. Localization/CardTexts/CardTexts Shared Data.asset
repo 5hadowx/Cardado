@@ -1,0 +1,196 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5b11a58205ec3474ca216360e9fa74a8, type: 3}
+  m_Name: CardTexts Shared Data
+  m_EditorClassIdentifier: 
+  m_TableCollectionName: CardTexts
+  m_TableCollectionNameGuidString: e57e65f9bfc856b4a90481cc992b267f
+  m_Entries:
+  - m_Id: 317287042424832
+    m_Key: card_knight_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 317439178219520
+    m_Key: card_knight_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 317844498980864
+    m_Key: card_bodyguard_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318033821474816
+    m_Key: card_bodyguard_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318072924971008
+    m_Key: card_artist_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318134820315136
+    m_Key: card_artist_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318212704346112
+    m_Key: card_collector_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 318294300336128
+    m_Key: card_collector_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 319708602867712
+    m_Key: card_diceModifier_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 319965743063040
+    m_Key: card_diceModifier_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321386253164544
+    m_Key: card_specialKnight_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321815577927680
+    m_Key: card_specialKnight_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321900101541888
+    m_Key: card_specialBodyguard_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321961501958144
+    m_Key: card_specialBodyguard_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 321988571996160
+    m_Key: card_specialArtist_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322050706415616
+    m_Key: card_specialArtist_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322112295575552
+    m_Key: card_specialCollector_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 322199511932928
+    m_Key: card_specialCollector_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339569911570432
+    m_Key: card_mirror_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339628434694144
+    m_Key: card_mirror_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339649573986304
+    m_Key: card_executioner_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 339696617299968
+    m_Key: card_executioner_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341627326734336
+    m_Key: card_joker_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341669487878144
+    m_Key: card_joker_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341691809964032
+    m_Key: card_queen_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341774290952192
+    m_Key: card_queen_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341813071486976
+    m_Key: card_king_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 341978423533568
+    m_Key: card_king_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 342069817417728
+    m_Key: card_nobleman_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 342140713738240
+    m_Key: card_nobleman_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448169212043264
+    m_Key: card_emptyArtist_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448282235953152
+    m_Key: card_emptyArtist_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448482186813440
+    m_Key: card_emptyKnight_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448658095923200
+    m_Key: card_emptyKnight_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448719395676160
+    m_Key: card_emptyBodyguard_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448722029699072
+    m_Key: card_emptyBodyguard_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448989898924032
+    m_Key: card_emptyCollector_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138448990515486720
+    m_Key: card_emptyCollector_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138450980771454976
+    m_Key: card_specialExecutioner_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138450988824518656
+    m_Key: card_specialExecutioner_desc
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138451220140384256
+    m_Key: card_specialMirror_name
+    m_Metadata:
+      m_Items: []
+  - m_Id: 138451348448337920
+    m_Key: card_specialMirror_desc
+    m_Metadata:
+      m_Items: []
+  m_Metadata:
+    m_Items: []
+  m_KeyGenerator:
+    rid: 2369019885809041408
+  references:
+    version: 2
+    RefIds:
+    - rid: 2369019885809041408
+      type: {class: DistributedUIDGenerator, ns: UnityEngine.Localization.Tables, asm: Unity.Localization}
+      data:
+        m_CustomEpoch: 1754064863827

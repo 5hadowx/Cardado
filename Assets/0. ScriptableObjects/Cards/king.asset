@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a0aaf16e35d2314f8964270bf60c4c2, type: 3}
+  m_Name: king
+  m_EditorClassIdentifier: 
+  id: king
+  cardName:
+    m_TableReference:
+      m_TableCollectionName: CardTexts
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: card_king_name
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  cardDescription:
+    m_TableReference:
+      m_TableCollectionName: CardTexts
+    m_TableEntryReference:
+      m_KeyId: 0
+      m_Key: card_king_desc
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  cardType: 7
+  rarity: 2
+  artwork: {fileID: -4821530343430527414, guid: 9f3e91c1bff606241b0db2d1ddd0e040, type: 3}
+  isBlankCard: 0
+  isModifier: 0
+  canAdd: 0
+  canSubtract: 0
+  isPersistent: 0
+  references:
+    version: 2
+    RefIds: []

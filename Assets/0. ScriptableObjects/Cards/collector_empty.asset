@@ -1,0 +1,44 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 1a0aaf16e35d2314f8964270bf60c4c2, type: 3}
+  m_Name: collector_empty
+  m_EditorClassIdentifier: 
+  id: collector_empty
+  cardName:
+    m_TableReference:
+      m_TableCollectionName: GUID:e57e65f9bfc856b4a90481cc992b267f
+    m_TableEntryReference:
+      m_KeyId: 138448989898924032
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  cardDescription:
+    m_TableReference:
+      m_TableCollectionName: GUID:e57e65f9bfc856b4a90481cc992b267f
+    m_TableEntryReference:
+      m_KeyId: 138448990515486720
+      m_Key: 
+    m_FallbackState: 0
+    m_WaitForCompletion: 0
+    m_LocalVariables: []
+  cardType: 2
+  rarity: 0
+  artwork: {fileID: -1592465126247500338, guid: 5ec179f610bf5364e80d3c6190d30875, type: 3}
+  isBlankCard: 1
+  isModifier: 0
+  canAdd: 0
+  canSubtract: 0
+  isPersistent: 0
+  references:
+    version: 2
+    RefIds: []
