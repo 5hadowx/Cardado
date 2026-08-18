@@ -10,7 +10,7 @@ public class CardTester : MonoBehaviour
 
     [Header("Test Cards")]
     public CardData artistCard;
-    public CardData soldierCard;
+    public CardData knightCard;
 
     private int currentLocaleIndex = 0;
 
@@ -27,10 +27,10 @@ public class CardTester : MonoBehaviour
 
         if (Keyboard.current.sKey.wasPressedThisFrame)
         {
-            if (soldierCard != null)
+            if (knightCard != null)
             {
-                cardDisplay.ShowCard(soldierCard);
-                Debug.Log("🛡️ Showing Soldier card");
+                cardDisplay.ShowCard(knightCard);
+                Debug.Log("🛡️ Showing Knight card");
             }
         }
 
@@ -51,5 +51,3 @@ public class CardTester : MonoBehaviour
         Debug.Log("🌐 Switched language to: " + LocalizationSettings.SelectedLocale.Identifier.Code);
     }
 }
-
-

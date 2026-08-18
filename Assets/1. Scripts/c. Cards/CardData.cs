@@ -4,7 +4,7 @@ using UnityEngine.Localization;
 public enum CardType
 {
     Artist,
-    Soldier,
+    Knight,
     Collector,
     Bodyguard,
     Mirror,
@@ -19,7 +19,8 @@ public enum CardRarity
 {
     Normal,
     Special,
-    Royalty
+    Royalty,
+    Empty
 }
 
 [CreateAssetMenu(fileName = "NewCard", menuName = "Cardado/Card")]
@@ -43,4 +44,3 @@ public class CardData : ScriptableObject
     public bool canSubtract;
     public bool isPersistent;
 }
-
