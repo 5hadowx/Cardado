@@ -23,9 +23,13 @@ public class CardadoGameManager : MonoBehaviour
 {
     [Header("Match Setup")]
     [SerializeField] private int startingChips = 3;
+    [SerializeField, Min(2)] private int maxPlayers = 5;
 
     [Header("Players")]
-    [SerializeField] private List<string> playerIds = new List<string>();
+    [SerializeField] private List<string> playerIds = new List<string> { "Player 1", "Player 2", "Player 3", "Player 4" };
+
+    [Header("Cards")]
+    [SerializeField] private CardData[] allCards;
 
     public IReadOnlyList<CardadoPlayerState> Players => players;
     public CardadoGamePhase Phase { get; private set; } = CardadoGamePhase.WaitingForDealer;
@@ -35,11 +39,13 @@ public class CardadoGameManager : MonoBehaviour
     public int RoundCardCount { get; private set; }
     public RoundSetupRoll SetupRoll { get; private set; }
     public RoundSetupDecisionType? PendingDealerDecision { get; private set; }
+    public Deck RoundDeck { get; private set; }
 
     public event Action<CardadoGamePhase> PhaseChanged;
     public event Action<RoundSetupRoll> SetupDiceRolled;
     public event Action<RoundSetupDecisionType> DealerDecisionRequested;
     public event Action<int, int> RoundSetupCompleted;
+    public event Action<CardadoPlayerState> PlayerHandDealt;
 
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
@@ -47,13 +53,11 @@ public class CardadoGameManager : MonoBehaviour
 
     private void Awake()
     {
+        ValidatePlayerConfiguration();
         BuildPlayers();
+        InitializeDeck();
     }
 
-    /// <summary>
-    /// The caller/UI/network layer can choose the dealer once the seating/order is known.
-    /// We intentionally do not invent a dealer-selection rule here.
-    /// </summary>
     public void SetDealer(int playerIndex)
     {
         ValidatePlayerIndex(playerIndex);
@@ -62,10 +66,6 @@ public class CardadoGameManager : MonoBehaviour
         SetPhase(CardadoGamePhase.RoundSetupRoll);
     }
 
-    /// <summary>
-    /// Rolls the two setup dice as one logical action.
-    /// Both results exist before any dealer decision is requested.
-    /// </summary>
     public void RollRoundSetupDice()
     {
         if (DealerPlayerIndex < 0)
@@ -81,10 +81,6 @@ public class CardadoGameManager : MonoBehaviour
         RequestNextDealerDecision();
     }
 
-    /// <summary>
-    /// Resolves the currently requested 6-choice. If both setup dice are 6,
-    /// the second choice is requested only after the first one is completed.
-    /// </summary>
     public void ResolveDealerChoice(int chosenCount)
     {
         if (Phase != CardadoGamePhase.DealerSetupDecision || !PendingDealerDecision.HasValue)
@@ -103,12 +99,15 @@ public class CardadoGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Starts betting once the setup dice and any 6 choices have been resolved.
+    /// Deals the initial round hand before betting. Each card is drawn independently,
+    /// so the deck can recycle its discard pile exactly when a draw reaches an empty pile.
     /// </summary>
     public void BeginBetting()
     {
         if (Phase != CardadoGamePhase.DealerSetupDecision || PendingDealerDecision.HasValue)
             throw new InvalidOperationException("Round setup is not complete.");
+
+        DealInitialHands();
 
         foreach (var player in players)
             player.ResetRoundScore();
@@ -130,9 +129,6 @@ public class CardadoGameManager : MonoBehaviour
         return true;
     }
 
-    /// <summary>
-    /// Cardado requires the total of all bids to be different from the number of hands.
-    /// </summary>
     public bool AreBidsValid()
     {
         if (RoundDiceCount <= 0)
@@ -145,10 +141,6 @@ public class CardadoGameManager : MonoBehaviour
         return totalBids != RoundDiceCount;
     }
 
-    /// <summary>
-    /// Once bidding is valid, reveal the dice and enter the hand-playing phase.
-    /// Actual dice objects/animation will be connected later.
-    /// </summary>
     public void BeginPlayingHands()
     {
         if (Phase != CardadoGamePhase.Betting || !AreBidsValid())
@@ -158,13 +150,57 @@ public class CardadoGameManager : MonoBehaviour
         SetPhase(CardadoGamePhase.PlayingHands);
     }
 
-    /// <summary>
-    /// The winner of a hand becomes the first player of the next hand.
-    /// </summary>
     public void SetNextHandStarter(int winnerPlayerIndex)
     {
         ValidatePlayerIndex(winnerPlayerIndex);
         StartingPlayerIndex = winnerPlayerIndex;
+    }
+
+    /// <summary>
+    /// Sends a resolved/non-permanent card to the current round's discard pile.
+    /// Permanent cards remain active instead of being discarded here.
+    /// </summary>
+    public void DiscardResolvedCard(CardInstance card)
+    {
+        if (RoundDeck == null)
+            throw new InvalidOperationException("The round deck has not been initialized.");
+
+        RoundDeck.Discard(card);
+    }
+
+    private void DealInitialHands()
+    {
+        if (RoundCardCount <= 0)
+            throw new InvalidOperationException("Round card count must be resolved before dealing.");
+
+        if (RoundDeck == null)
+            InitializeDeck();
+
+        foreach (var player in players)
+        {
+            for (int i = 0; i < RoundCardCount; i++)
+            {
+                CardInstance card = RoundDeck.Draw();
+                if (card == null)
+                    throw new InvalidOperationException("No cards are available to complete the round deal.");
+
+                player.hand.AddCard(card);
+            }
+
+            PlayerHandDealt?.Invoke(player);
+        }
+    }
+
+    private void InitializeDeck()
+    {
+        if (allCards == null || allCards.Length == 0)
+        {
+            RoundDeck = null;
+            return;
+        }
+
+        RoundDeck = new Deck(new List<CardData>(allCards));
+        RoundDeck.Shuffle();
     }
 
     private void BuildPlayers()
@@ -176,6 +212,22 @@ public class CardadoGameManager : MonoBehaviour
             if (!string.IsNullOrWhiteSpace(playerId))
                 players.Add(new CardadoPlayerState(playerId, startingChips));
         }
+    }
+
+    private void ValidatePlayerConfiguration()
+    {
+        int configuredPlayers = 0;
+        foreach (string playerId in playerIds)
+        {
+            if (!string.IsNullOrWhiteSpace(playerId))
+                configuredPlayers++;
+        }
+
+        if (configuredPlayers < 2)
+            throw new InvalidOperationException("Cardado requires at least 2 configured players.");
+
+        if (configuredPlayers > maxPlayers)
+            throw new InvalidOperationException($"Cardado supports a maximum of {maxPlayers} configured players.");
     }
 
     private void RequestNextDealerDecision()
@@ -200,10 +252,6 @@ public class CardadoGameManager : MonoBehaviour
         SetPhase(CardadoGamePhase.DealerSetupDecision);
     }
 
-    /// <summary>
-    /// Player list order is clockwise around the table, so the next index is the player to the dealer's right.
-    /// This is isolated here so the seating convention can be changed without touching round logic.
-    /// </summary>
     private int GetPlayerToRightOf(int playerIndex)
     {
         if (players.Count == 0)
