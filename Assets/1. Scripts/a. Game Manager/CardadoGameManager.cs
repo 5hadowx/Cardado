@@ -248,8 +248,11 @@ public class CardadoGameManager : MonoBehaviour
         if (SetupRoll.cardCountDie != 6)
             RoundCardCount = SetupRoll.cardCountDie;
 
-        RoundSetupCompleted?.Invoke(RoundDiceCount, RoundCardCount);
+        // Enter the same stable phase used by ResolveDealerChoice before notifying
+        // listeners that setup is complete. This allows listeners to immediately
+        // continue into BeginBetting without racing the phase transition.
         SetPhase(CardadoGamePhase.DealerSetupDecision);
+        RoundSetupCompleted?.Invoke(RoundDiceCount, RoundCardCount);
     }
 
     private int GetPlayerToRightOf(int playerIndex)
