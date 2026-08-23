@@ -20,8 +20,7 @@ public enum CardRarity
     Empty,
     Normal,
     Special,
-    Royalty,
-    Empty
+    Royalty
 }
 
 [CreateAssetMenu(fileName = "NewCard", menuName = "Cardado/Card")]
