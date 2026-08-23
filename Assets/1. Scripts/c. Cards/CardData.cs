@@ -17,6 +17,7 @@ public enum CardType
 
 public enum CardRarity
 {
+    Empty,
     Normal,
     Special,
     Royalty,

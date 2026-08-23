@@ -32,7 +32,7 @@ MonoBehaviour:
     m_WaitForCompletion: 0
     m_LocalVariables: []
   cardType: 8
-  rarity: 2
+  rarity: 3
   artwork: {fileID: 7519753400087680208, guid: e47581343941bba42a0fbae1811d6083, type: 3}
   isBlankCard: 0
   isModifier: 0
