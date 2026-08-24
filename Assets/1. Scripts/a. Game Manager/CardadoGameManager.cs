@@ -8,6 +8,7 @@ public enum CardadoGamePhase
     RoundSetupRoll,
     DealerSetupDecision,
     Betting,
+    RollDice,
     RevealDice,
     PlayingHands,
     RoundResolution,
@@ -48,6 +49,7 @@ public class CardadoGameManager : MonoBehaviour
     public event Action<RoundSetupDecisionType> DealerDecisionRequested;
     public event Action<int, int> RoundSetupCompleted;
     public event Action<CardadoPlayerState> PlayerHandDealt;
+    public event Action<CardadoPlayerState> PlayerDiceRolled;
     public event Action<CardadoPlayerState, int> BettingTurnStarted;
     public event Action BettingCompleted;
 
@@ -107,6 +109,11 @@ public class CardadoGameManager : MonoBehaviour
         RequestNextDealerDecision();
     }
 
+    /// <summary>
+    /// Completes the round setup in the physical-game order: deal the round hand,
+    /// roll each player's round dice, then begin betting. Players therefore know
+    /// both their cards and their rolled dice before making their prediction.
+    /// </summary>
     public void BeginBetting()
     {
         if (Phase != CardadoGamePhase.DealerSetupDecision || PendingDealerDecision.HasValue)
@@ -116,6 +123,8 @@ public class CardadoGameManager : MonoBehaviour
 
         foreach (var player in players)
             player.ResetRoundScore();
+
+        RollRoundDiceForPlayers();
 
         CurrentBettingPlayerIndex = StartingPlayerIndex;
         SetPhase(CardadoGamePhase.Betting);
@@ -161,11 +170,6 @@ public class CardadoGameManager : MonoBehaviour
         return true;
     }
 
-    /// <summary>
-    /// Returns whether a proposed dice prediction is legal for the current player.
-    /// The dealer is the final caller, so the restriction preventing the total
-    /// predictions from matching the total dice is pre-calculated here.
-    /// </summary>
     public bool IsValidDicePrediction(int playerIndex, int dicePrediction)
     {
         ValidatePlayerIndex(playerIndex);
@@ -176,16 +180,7 @@ public class CardadoGameManager : MonoBehaviour
         if (playerIndex != DealerPlayerIndex)
             return true;
 
-        int previousPredictions = 0;
-        foreach (var player in players)
-        {
-            if (player == players[playerIndex])
-                continue;
-
-            if (player.hasPlacedBid)
-                previousPredictions += player.diceBid;
-        }
-
+        int previousPredictions = GetPlacedDicePredictionsExcluding(playerIndex);
         return previousPredictions + dicePrediction != RoundDiceCount;
     }
 
@@ -236,7 +231,6 @@ public class CardadoGameManager : MonoBehaviour
         if (Phase != CardadoGamePhase.Betting || !AreBidsValid())
             throw new InvalidOperationException("Bidding is incomplete or invalid.");
 
-        SetPhase(CardadoGamePhase.RevealDice);
         SetPhase(CardadoGamePhase.PlayingHands);
     }
 
@@ -274,6 +268,22 @@ public class CardadoGameManager : MonoBehaviour
             }
 
             PlayerHandDealt?.Invoke(player);
+        }
+    }
+
+    private void RollRoundDiceForPlayers()
+    {
+        if (RoundDiceCount <= 0)
+            throw new InvalidOperationException("Round dice count must be resolved before rolling player dice.");
+
+        foreach (var player in players)
+        {
+            player.dice.Clear();
+
+            for (int i = 0; i < RoundDiceCount; i++)
+                player.dice.Add(UnityEngine.Random.Range(1, 7));
+
+            PlayerDiceRolled?.Invoke(player);
         }
     }
 
