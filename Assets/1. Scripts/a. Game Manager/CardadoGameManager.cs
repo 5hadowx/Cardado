@@ -145,6 +145,7 @@ public class CardadoGameManager : MonoBehaviour
             return false;
 
         players[playerIndex].bid = bid;
+        players[playerIndex].hasPlacedBid = true;
 
         int nextPlayer = GetNextPlayerIndex(playerIndex);
         if (nextPlayer == StartingPlayerIndex)
@@ -169,7 +170,7 @@ public class CardadoGameManager : MonoBehaviour
     {
         foreach (var player in players)
         {
-            if (player.bid < 0)
+            if (!player.hasPlacedBid)
                 return false;
         }
 
