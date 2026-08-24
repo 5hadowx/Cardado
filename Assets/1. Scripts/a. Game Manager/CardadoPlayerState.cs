@@ -11,6 +11,7 @@ public class CardadoPlayerState
     public int chips;
     public int bid;
     public int handsWon;
+    public bool hasPlacedBid;
 
     // Values of dice currently available to the player.
     // A value of 0 means the die is no longer available to play.
@@ -27,6 +28,7 @@ public class CardadoPlayerState
     public void ResetRoundScore()
     {
         bid = 0;
+        hasPlacedBid = false;
         handsWon = 0;
     }
 }
