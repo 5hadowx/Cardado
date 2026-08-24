@@ -22,7 +22,7 @@ public enum CardadoGamePhase
 public class CardadoGameManager : MonoBehaviour
 {
     [Header("Match Setup")]
-    [SerializeField] private int startingChips = 3;
+    [SerializeField] private CardadoMatchConfig matchConfig = new CardadoMatchConfig();
     [SerializeField, Min(2)] private int maxPlayers = 5;
 
     [Header("Players")]
@@ -32,9 +32,11 @@ public class CardadoGameManager : MonoBehaviour
     [SerializeField] private CardData[] allCards;
 
     public IReadOnlyList<CardadoPlayerState> Players => players;
+    public CardadoMatchConfig MatchConfig => matchConfig;
     public CardadoGamePhase Phase { get; private set; } = CardadoGamePhase.WaitingForDealer;
     public int DealerPlayerIndex { get; private set; } = -1;
     public int StartingPlayerIndex { get; private set; } = -1;
+    public int CurrentBettingPlayerIndex { get; private set; } = -1;
     public int RoundDiceCount { get; private set; }
     public int RoundCardCount { get; private set; }
     public RoundSetupRoll SetupRoll { get; private set; }
@@ -46,6 +48,8 @@ public class CardadoGameManager : MonoBehaviour
     public event Action<RoundSetupDecisionType> DealerDecisionRequested;
     public event Action<int, int> RoundSetupCompleted;
     public event Action<CardadoPlayerState> PlayerHandDealt;
+    public event Action<CardadoPlayerState, int> BettingTurnStarted;
+    public event Action BettingCompleted;
 
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
@@ -53,6 +57,10 @@ public class CardadoGameManager : MonoBehaviour
 
     private void Awake()
     {
+        if (matchConfig == null)
+            matchConfig = new CardadoMatchConfig();
+
+        matchConfig.Validate();
         ValidatePlayerConfiguration();
         BuildPlayers();
         InitializeDeck();
@@ -63,6 +71,7 @@ public class CardadoGameManager : MonoBehaviour
         ValidatePlayerIndex(playerIndex);
         DealerPlayerIndex = playerIndex;
         StartingPlayerIndex = GetPlayerToRightOf(playerIndex);
+        CurrentBettingPlayerIndex = -1;
         SetPhase(CardadoGamePhase.RoundSetupRoll);
     }
 
@@ -112,9 +121,15 @@ public class CardadoGameManager : MonoBehaviour
         foreach (var player in players)
             player.ResetRoundScore();
 
+        CurrentBettingPlayerIndex = StartingPlayerIndex;
         SetPhase(CardadoGamePhase.Betting);
+        NotifyBettingTurn();
     }
 
+    /// <summary>
+    /// Places the current player's round prediction. Bids are independent;
+    /// players do not have to make their bids add up to the number of dice.
+    /// </summary>
     public bool TryPlaceBid(int playerIndex, int bid)
     {
         ValidatePlayerIndex(playerIndex);
@@ -122,23 +137,48 @@ public class CardadoGameManager : MonoBehaviour
         if (Phase != CardadoGamePhase.Betting)
             return false;
 
-        if (bid < 0 || bid > RoundDiceCount)
+        if (playerIndex != CurrentBettingPlayerIndex)
+            return false;
+
+        int maximumBid = matchConfig.GetMaximumBid(RoundDiceCount, players[playerIndex].chips);
+        if (bid < 0 || bid > maximumBid)
             return false;
 
         players[playerIndex].bid = bid;
+
+        int nextPlayer = GetNextPlayerIndex(playerIndex);
+        if (nextPlayer == StartingPlayerIndex)
+        {
+            CurrentBettingPlayerIndex = -1;
+            BettingCompleted?.Invoke();
+            return true;
+        }
+
+        CurrentBettingPlayerIndex = nextPlayer;
+        NotifyBettingTurn();
         return true;
+    }
+
+    public int GetMaximumBidForPlayer(int playerIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+        return matchConfig.GetMaximumBid(RoundDiceCount, players[playerIndex].chips);
+    }
+
+    public bool AreAllBidsPlaced()
+    {
+        foreach (var player in players)
+        {
+            if (player.bid < 0)
+                return false;
+        }
+
+        return CurrentBettingPlayerIndex < 0;
     }
 
     public bool AreBidsValid()
     {
-        if (RoundDiceCount <= 0)
-            return false;
-
-        int totalBids = 0;
-        foreach (var player in players)
-            totalBids += player.bid;
-
-        return totalBids != RoundDiceCount;
+        return Phase == CardadoGamePhase.Betting && AreAllBidsPlaced();
     }
 
     public void BeginPlayingHands()
@@ -210,7 +250,7 @@ public class CardadoGameManager : MonoBehaviour
         foreach (string playerId in playerIds)
         {
             if (!string.IsNullOrWhiteSpace(playerId))
-                players.Add(new CardadoPlayerState(playerId, startingChips));
+                players.Add(new CardadoPlayerState(playerId, matchConfig.startingChips));
         }
     }
 
@@ -248,11 +288,18 @@ public class CardadoGameManager : MonoBehaviour
         if (SetupRoll.cardCountDie != 6)
             RoundCardCount = SetupRoll.cardCountDie;
 
-        // Enter the same stable phase used by ResolveDealerChoice before notifying
-        // listeners that setup is complete. This allows listeners to immediately
-        // continue into BeginBetting without racing the phase transition.
         SetPhase(CardadoGamePhase.DealerSetupDecision);
         RoundSetupCompleted?.Invoke(RoundDiceCount, RoundCardCount);
+    }
+
+    private void NotifyBettingTurn()
+    {
+        if (CurrentBettingPlayerIndex < 0)
+            return;
+
+        BettingTurnStarted?.Invoke(
+            players[CurrentBettingPlayerIndex],
+            matchConfig.GetMaximumBid(RoundDiceCount, players[CurrentBettingPlayerIndex].chips));
     }
 
     private int GetPlayerToRightOf(int playerIndex)
@@ -260,6 +307,11 @@ public class CardadoGameManager : MonoBehaviour
         if (players.Count == 0)
             return -1;
 
+        return (playerIndex + 1) % players.Count;
+    }
+
+    private int GetNextPlayerIndex(int playerIndex)
+    {
         return (playerIndex + 1) % players.Count;
     }
 
