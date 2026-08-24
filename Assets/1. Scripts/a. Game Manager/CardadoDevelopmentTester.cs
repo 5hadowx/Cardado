@@ -11,6 +11,8 @@ public class CardadoDevelopmentTester : MonoBehaviour
     [SerializeField] private bool startOnPlay = true;
 
     private bool showDealerChoice;
+    private bool showBettingChoice;
+    private int bettingPlayerIndex = -1;
     private GUIStyle panelStyle;
     private GUIStyle titleStyle;
     private GUIStyle buttonStyle;
@@ -35,6 +37,8 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.DealerDecisionRequested += OnDealerDecisionRequested;
         gameManager.RoundSetupCompleted += OnRoundSetupCompleted;
         gameManager.PlayerHandDealt += OnPlayerHandDealt;
+        gameManager.BettingTurnStarted += OnBettingTurnStarted;
+        gameManager.BettingCompleted += OnBettingCompleted;
 
         Debug.Log("=== CARDADO DEVELOPMENT TEST ===");
         Debug.Log($"Dealer: Player {dealerPlayerIndex + 1}");
@@ -86,11 +90,43 @@ public class CardadoDevelopmentTester : MonoBehaviour
         Debug.Log($"[Cardado] {player.playerId} dealt their initial hand.");
     }
 
+    private void OnBettingTurnStarted(CardadoPlayerState player, int playerIndex)
+    {
+        bettingPlayerIndex = playerIndex;
+        showBettingChoice = true;
+        Debug.Log($"[Cardado] BET REQUIRED: {player.playerId}. Maximum bid: {gameManager.GetMaximumBidForPlayer(playerIndex)}");
+    }
+
+    private void OnBettingCompleted()
+    {
+        bettingPlayerIndex = -1;
+        showBettingChoice = false;
+        Debug.Log("[Cardado] All players have placed their bids.");
+
+        try
+        {
+            gameManager.BeginPlayingHands();
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+    }
+
     private void OnGUI()
     {
-        if (!showDealerChoice || gameManager == null || !gameManager.PendingDealerDecision.HasValue)
+        if (showDealerChoice && gameManager != null && gameManager.PendingDealerDecision.HasValue)
+        {
+            DrawDealerChoicePanel();
             return;
+        }
 
+        if (showBettingChoice && gameManager != null && bettingPlayerIndex >= 0)
+            DrawBettingPanel();
+    }
+
+    private void DrawDealerChoicePanel()
+    {
         EnsureStyles();
 
         const float width = 520f;
@@ -127,11 +163,62 @@ public class CardadoDevelopmentTester : MonoBehaviour
         }
     }
 
+    private void DrawBettingPanel()
+    {
+        EnsureStyles();
+
+        int maximumBid = gameManager.GetMaximumBidForPlayer(bettingPlayerIndex);
+        CardadoPlayerState player = gameManager.Players[bettingPlayerIndex];
+
+        const float width = 620f;
+        const float height = 260f;
+        Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+
+        GUI.Box(panel, GUIContent.none, panelStyle);
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
+            $"{player.playerId} — PLACE BET", titleStyle);
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 68f, width - 50f, 35f),
+            $"Choose 0 to {maximumBid} chips. You have {player.chips} chips.", GUI.skin.label);
+
+        float buttonWidth = 78f;
+        float spacing = 10f;
+        int buttonCount = maximumBid + 1;
+        float totalWidth = buttonWidth * buttonCount + spacing * (buttonCount - 1);
+        float startX = panel.x + (width - totalWidth) * 0.5f;
+
+        for (int value = 0; value <= maximumBid; value++)
+        {
+            Rect buttonRect = new Rect(
+                startX + value * (buttonWidth + spacing),
+                panel.y + 125f,
+                buttonWidth,
+                60f);
+
+            if (GUI.Button(buttonRect, value.ToString(), buttonStyle))
+                ResolveBet(value);
+        }
+    }
+
     private void ResolveDealerChoice(int value)
     {
         try
         {
             gameManager.ResolveDealerChoice(value);
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+    }
+
+    private void ResolveBet(int value)
+    {
+        try
+        {
+            if (!gameManager.TryPlaceBid(bettingPlayerIndex, value))
+                Debug.LogWarning($"[Cardado] Bid rejected for Player {bettingPlayerIndex + 1}: {value}");
         }
         catch (System.Exception exception)
         {
@@ -171,5 +258,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.DealerDecisionRequested -= OnDealerDecisionRequested;
         gameManager.RoundSetupCompleted -= OnRoundSetupCompleted;
         gameManager.PlayerHandDealt -= OnPlayerHandDealt;
+        gameManager.BettingTurnStarted -= OnBettingTurnStarted;
+        gameManager.BettingCompleted -= OnBettingCompleted;
     }
 }
