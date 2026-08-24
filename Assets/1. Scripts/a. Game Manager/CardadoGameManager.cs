@@ -107,10 +107,6 @@ public class CardadoGameManager : MonoBehaviour
         RequestNextDealerDecision();
     }
 
-    /// <summary>
-    /// Deals the initial round hand before betting. Each card is drawn independently,
-    /// so the deck can recycle its discard pile exactly when a draw reaches an empty pile.
-    /// </summary>
     public void BeginBetting()
     {
         if (Phase != CardadoGamePhase.DealerSetupDecision || PendingDealerDecision.HasValue)
@@ -127,24 +123,29 @@ public class CardadoGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Places the current player's round prediction. Bids are independent;
-    /// players do not have to make their bids add up to the number of dice.
+    /// Places both parts of the round call atomically: the chip amount wagered
+    /// and the number of dice the player predicts they will win.
+    /// The chip bet is at least 1 and is limited by the player's chips and the match cap.
+    /// The dice prediction is independent of the chip amount and ranges from 0 to
+    /// the number of dice in the round. The dealer has the additional final-call
+    /// restriction that the total predictions cannot equal the total dice count.
     /// </summary>
-    public bool TryPlaceBid(int playerIndex, int bid)
+    public bool TryPlaceRoundCall(int playerIndex, int chipBet, int dicePrediction)
     {
         ValidatePlayerIndex(playerIndex);
 
-        if (Phase != CardadoGamePhase.Betting)
+        if (Phase != CardadoGamePhase.Betting || playerIndex != CurrentBettingPlayerIndex)
             return false;
 
-        if (playerIndex != CurrentBettingPlayerIndex)
+        int maximumChipBet = matchConfig.GetMaximumRoundBet(players[playerIndex].chips);
+        if (chipBet < 1 || chipBet > maximumChipBet)
             return false;
 
-        int maximumBid = matchConfig.GetMaximumBid(RoundDiceCount, players[playerIndex].chips);
-        if (bid < 0 || bid > maximumBid)
+        if (!IsValidDicePrediction(playerIndex, dicePrediction))
             return false;
 
-        players[playerIndex].bid = bid;
+        players[playerIndex].roundBet = chipBet;
+        players[playerIndex].diceBid = dicePrediction;
         players[playerIndex].hasPlacedBid = true;
 
         int nextPlayer = GetNextPlayerIndex(playerIndex);
@@ -160,10 +161,51 @@ public class CardadoGameManager : MonoBehaviour
         return true;
     }
 
-    public int GetMaximumBidForPlayer(int playerIndex)
+    /// <summary>
+    /// Returns whether a proposed dice prediction is legal for the current player.
+    /// The dealer is the final caller, so the restriction preventing the total
+    /// predictions from matching the total dice is pre-calculated here.
+    /// </summary>
+    public bool IsValidDicePrediction(int playerIndex, int dicePrediction)
     {
         ValidatePlayerIndex(playerIndex);
-        return matchConfig.GetMaximumBid(RoundDiceCount, players[playerIndex].chips);
+
+        if (dicePrediction < 0 || dicePrediction > RoundDiceCount)
+            return false;
+
+        if (playerIndex != DealerPlayerIndex)
+            return true;
+
+        int previousPredictions = 0;
+        foreach (var player in players)
+        {
+            if (player == players[playerIndex])
+                continue;
+
+            if (player.hasPlacedBid)
+                previousPredictions += player.diceBid;
+        }
+
+        return previousPredictions + dicePrediction != RoundDiceCount;
+    }
+
+    public int GetMaximumRoundBetForPlayer(int playerIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+        return matchConfig.GetMaximumRoundBet(players[playerIndex].chips);
+    }
+
+    public int GetMinimumDicePredictionForPlayer(int playerIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+        if (playerIndex == DealerPlayerIndex)
+        {
+            int previousPredictions = GetPlacedDicePredictionsExcluding(playerIndex);
+            if (previousPredictions == RoundDiceCount)
+                return 1;
+        }
+
+        return 0;
     }
 
     public bool AreAllBidsPlaced()
@@ -179,7 +221,14 @@ public class CardadoGameManager : MonoBehaviour
 
     public bool AreBidsValid()
     {
-        return Phase == CardadoGamePhase.Betting && AreAllBidsPlaced();
+        if (Phase != CardadoGamePhase.Betting || !AreAllBidsPlaced())
+            return false;
+
+        int totalPredictedDice = 0;
+        foreach (var player in players)
+            totalPredictedDice += player.diceBid;
+
+        return totalPredictedDice != RoundDiceCount;
     }
 
     public void BeginPlayingHands()
@@ -197,10 +246,6 @@ public class CardadoGameManager : MonoBehaviour
         StartingPlayerIndex = winnerPlayerIndex;
     }
 
-    /// <summary>
-    /// Sends a resolved/non-permanent card to the current round's discard pile.
-    /// Permanent cards remain active instead of being discarded here.
-    /// </summary>
     public void DiscardResolvedCard(CardInstance card)
     {
         if (RoundDeck == null)
@@ -298,9 +343,22 @@ public class CardadoGameManager : MonoBehaviour
         if (CurrentBettingPlayerIndex < 0)
             return;
 
-        BettingTurnStarted?.Invoke(
-            players[CurrentBettingPlayerIndex],
-            matchConfig.GetMaximumBid(RoundDiceCount, players[CurrentBettingPlayerIndex].chips));
+        BettingTurnStarted?.Invoke(players[CurrentBettingPlayerIndex], CurrentBettingPlayerIndex);
+    }
+
+    private int GetPlacedDicePredictionsExcluding(int excludedPlayerIndex)
+    {
+        int total = 0;
+        for (int i = 0; i < players.Count; i++)
+        {
+            if (i == excludedPlayerIndex)
+                continue;
+
+            if (players[i].hasPlacedBid)
+                total += players[i].diceBid;
+        }
+
+        return total;
     }
 
     private int GetPlayerToRightOf(int playerIndex)
