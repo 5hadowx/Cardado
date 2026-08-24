@@ -9,7 +9,8 @@ public class CardadoPlayerState
 {
     public string playerId;
     public int chips;
-    public int bid;
+    public int roundBet;
+    public int diceBid;
     public int handsWon;
     public bool hasPlacedBid;
 
@@ -27,7 +28,8 @@ public class CardadoPlayerState
 
     public void ResetRoundScore()
     {
-        bid = 0;
+        roundBet = 0;
+        diceBid = 0;
         hasPlacedBid = false;
         handsWon = 0;
     }
