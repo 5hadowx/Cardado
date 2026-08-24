@@ -40,6 +40,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.DealerDecisionRequested += OnDealerDecisionRequested;
         gameManager.RoundSetupCompleted += OnRoundSetupCompleted;
         gameManager.PlayerHandDealt += OnPlayerHandDealt;
+        gameManager.PlayerDiceRolled += OnPlayerDiceRolled;
         gameManager.BettingTurnStarted += OnBettingTurnStarted;
         gameManager.BettingCompleted += OnBettingCompleted;
 
@@ -91,6 +92,11 @@ public class CardadoDevelopmentTester : MonoBehaviour
     private void OnPlayerHandDealt(CardadoPlayerState player)
     {
         Debug.Log($"[Cardado] {player.playerId} dealt their initial hand.");
+    }
+
+    private void OnPlayerDiceRolled(CardadoPlayerState player)
+    {
+        Debug.Log($"[Cardado] {player.playerId} rolled: {string.Join(", ", player.dice)}");
     }
 
     private void OnBettingTurnStarted(CardadoPlayerState player, int playerIndex)
@@ -296,6 +302,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.DealerDecisionRequested -= OnDealerDecisionRequested;
         gameManager.RoundSetupCompleted -= OnRoundSetupCompleted;
         gameManager.PlayerHandDealt -= OnPlayerHandDealt;
+        gameManager.PlayerDiceRolled -= OnPlayerDiceRolled;
         gameManager.BettingTurnStarted -= OnBettingTurnStarted;
         gameManager.BettingCompleted -= OnBettingCompleted;
     }
