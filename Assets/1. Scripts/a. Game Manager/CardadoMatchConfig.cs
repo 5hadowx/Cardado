@@ -12,9 +12,9 @@ public class CardadoMatchConfig
     public bool betCapEnabled = true;
     public int maxBet = 3;
 
-    public int GetMaximumBid(int roundDiceCount, int playerChips)
+    public int GetMaximumRoundBet(int playerChips)
     {
-        int maximum = Math.Min(roundDiceCount, playerChips);
+        int maximum = playerChips;
 
         if (betCapEnabled)
             maximum = Math.Min(maximum, maxBet);
