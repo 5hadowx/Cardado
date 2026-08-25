@@ -344,6 +344,10 @@ public class CardadoGameManager : MonoBehaviour
             bool predictionCorrect = player.handsWon == player.diceBid;
             int chipChange = predictionCorrect ? player.roundBet : -player.roundBet;
             player.chips = Math.Max(0, player.chips + chipChange);
+
+            Debug.Log($"[Cardado] {player.playerId}: {player.handsWon} hand(s) won, prediction {player.diceBid}, " +
+                      $"round bet {player.roundBet}, {(predictionCorrect ? "PREDICTION HIT" : "PREDICTION MISSED")}, " +
+                      $"chip change {chipChange:+#;-#;0}, chips now {player.chips}.");
         }
 
         RoundResolutionCompleted?.Invoke();
