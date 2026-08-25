@@ -136,7 +136,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
     private void OnHandTurnStarted(CardadoPlayerState player, int handNumber, int handStarterIndex)
     {
-        handPlayerIndex = gameManager.Players.IndexOf(player);
+        handPlayerIndex = GetPlayerIndex(player);
         showDieChoice = true;
         Debug.Log($"[Cardado] HAND {handNumber}: {player.playerId} chooses a die. Hand starter: Player {handStarterIndex + 1}.");
     }
@@ -162,6 +162,17 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
         foreach (CardadoPlayerState player in gameManager.Players)
             Debug.Log($"[Cardado] {player.playerId}: {player.handsWon} hand(s) won, prediction {player.diceBid}.");
+    }
+
+    private int GetPlayerIndex(CardadoPlayerState player)
+    {
+        for (int i = 0; i < gameManager.Players.Count; i++)
+        {
+            if (gameManager.Players[i] == player)
+                return i;
+        }
+
+        return -1;
     }
 
     private void OnGUI()
