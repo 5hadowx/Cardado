@@ -2,7 +2,8 @@ using System.Text;
 using UnityEngine;
 
 /// <summary>
-/// Runtime-only development logger that prints the exact cards dealt to each player.
+/// Runtime-only development logger that prints the exact cards dealt to each player
+/// and the centralized War eligibility result during WarResolution.
 /// It creates itself automatically after the scene loads, so no scene setup is needed.
 /// </summary>
 public class CardadoDevelopmentCardLogger : MonoBehaviour
@@ -27,12 +28,16 @@ public class CardadoDevelopmentCardLogger : MonoBehaviour
             return;
 
         gameManager.PlayerHandDealt += OnPlayerHandDealt;
+        gameManager.PhaseChanged += OnPhaseChanged;
     }
 
     private void OnDestroy()
     {
-        if (gameManager != null)
-            gameManager.PlayerHandDealt -= OnPlayerHandDealt;
+        if (gameManager == null)
+            return;
+
+        gameManager.PlayerHandDealt -= OnPlayerHandDealt;
+        gameManager.PhaseChanged -= OnPhaseChanged;
     }
 
     private void OnPlayerHandDealt(CardadoPlayerState player)
@@ -65,5 +70,22 @@ public class CardadoDevelopmentCardLogger : MonoBehaviour
         }
 
         Debug.Log($"[Cardado] {player.playerId} dealt their initial hand: {details}");
+    }
+
+    private void OnPhaseChanged(CardadoGamePhase phase)
+    {
+        if (phase != CardadoGamePhase.WarResolution || gameManager == null)
+            return;
+
+        Debug.Log("[Cardado] Centralized War eligibility check:");
+
+        foreach (CardadoPlayerState player in gameManager.Players)
+        {
+            bool eligible = player != null &&
+                            player.hand != null &&
+                            CardadoWarRules.HasWarClaim(player.hand.cardsInHand);
+
+            Debug.Log($"[Cardado] {player.playerId}: War eligible = {eligible}.");
+        }
     }
 }
