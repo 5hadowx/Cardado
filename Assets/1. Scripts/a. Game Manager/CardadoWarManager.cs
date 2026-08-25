@@ -33,8 +33,6 @@ public class CardadoWarManager : MonoBehaviour
 
     private readonly List<int> challengerDice = new List<int>();
     private readonly List<int> targetDice = new List<int>();
-    private int challengerHandIndex;
-    private int targetHandIndex;
     private int challengerHandsWon;
     private int targetHandsWon;
     private int currentWarTurn;
@@ -43,7 +41,6 @@ public class CardadoWarManager : MonoBehaviour
     private int currentHandWinner = -1;
     private int currentHandTurns;
     private bool warResolved;
-    private bool waitingForNextWar;
 
     private GUIStyle panelStyle;
     private GUIStyle titleStyle;
@@ -92,7 +89,6 @@ public class CardadoWarManager : MonoBehaviour
         challengerIndex = -1;
         targetIndex = -1;
         warResolved = false;
-        waitingForNextWar = false;
         uiStep = WarUiStep.Claim;
 
         // Until the round manager exposes the complete turn-order history, use the
@@ -179,8 +175,7 @@ public class CardadoWarManager : MonoBehaviour
             targetDice.Add(UnityEngine.Random.Range(1, 7));
         }
 
-        challengerHandIndex = 0;
-        targetHandIndex = 0;
+        
         currentWarTurn = challengerPlaysFirst ? 0 : 1;
         uiStep = WarUiStep.Playing;
 
@@ -260,7 +255,6 @@ public class CardadoWarManager : MonoBehaviour
 
         claimedPlayers.Add(challengerIndex);
         warResolved = true;
-        waitingForNextWar = true;
         uiStep = WarUiStep.Complete;
     }
 
@@ -510,7 +504,6 @@ public class CardadoWarManager : MonoBehaviour
         challengerIndex = -1;
         targetIndex = -1;
         warResolved = false;
-        waitingForNextWar = false;
         uiStep = WarUiStep.Claim;
 
         Debug.Log("[Cardado] Returning to war claim selection for the next possible war.");
