@@ -122,7 +122,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         Debug.Log("[Cardado] All players have placed their round calls.");
 
         foreach (CardadoPlayerState player in gameManager.Players)
-            Debug.Log($"[Cardado] {player.playerId}: bet {player.roundBet} chip(s), predicts {player.diceBid} dice win(s).");
+            Debug.Log($"[Cardado] {player.playerId}: bet {player.roundBet} chip(s), predicts {player.diceBid} dice.");
 
         try
         {
@@ -239,15 +239,18 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
         GUI.Box(panel, GUIContent.none, panelStyle);
 
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, 455f, 45f),
             $"{player.playerId} — ROUND CALL", titleStyle);
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 68f, width - 50f, 30f),
+
+        DrawRolledDiceSummary(player, panel);
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 120f, width - 50f, 30f),
             $"Choose chips to bet (minimum 1, maximum {maximumChipBet}).", GUI.skin.label);
 
         float buttonWidth = 70f;
         float spacing = 10f;
         float chipStartX = panel.x + 25f;
-        float chipY = panel.y + 105f;
+        float chipY = panel.y + 155f;
 
         for (int value = 1; value <= maximumChipBet; value++)
         {
@@ -257,11 +260,11 @@ public class CardadoDevelopmentTester : MonoBehaviour
                 selectedChipBet = value;
         }
 
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 180f, width - 50f, 30f),
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 230f, width - 50f, 30f),
             $"Predict dice won (0 to {gameManager.RoundDiceCount}).", GUI.skin.label);
 
         float diceStartX = panel.x + 25f;
-        float diceY = panel.y + 217f;
+        float diceY = panel.y + 267f;
         int minimumDiceBid = gameManager.GetMinimumDicePredictionForPlayer(bettingPlayerIndex);
 
         for (int value = 0; value <= gameManager.RoundDiceCount; value++)
@@ -276,12 +279,26 @@ public class CardadoDevelopmentTester : MonoBehaviour
         }
 
         bool canConfirm = selectedDiceBid >= 0;
-        Rect confirmRect = new Rect(panel.x + 25f, panel.y + 315f, width - 50f, 50f);
+        Rect confirmRect = new Rect(panel.x + 25f, panel.y + 345f, width - 50f, 50f);
 
         if (canConfirm && GUI.Button(confirmRect, "CONFIRM ROUND CALL", selectedButtonStyle))
             ResolveRoundCall();
         else if (!canConfirm)
             GUI.Label(confirmRect, "Select both the chip bet and dice prediction.", GUI.skin.label);
+    }
+
+    private void DrawRolledDiceSummary(CardadoPlayerState player, Rect panel)
+    {
+        GUI.Label(new Rect(panel.x + 500f, panel.y + 25f, 230f, 35f), "DICE", titleStyle);
+
+        if (player.dice == null || player.dice.Count == 0)
+        {
+            GUI.Label(new Rect(panel.x + 500f, panel.y + 65f, 230f, 35f), "—", GUI.skin.label);
+            return;
+        }
+
+        string diceValues = string.Join("   ", player.dice);
+        GUI.Label(new Rect(panel.x + 500f, panel.y + 65f, 230f, 55f), diceValues, buttonStyle);
     }
 
     private void DrawDieChoicePanel()
