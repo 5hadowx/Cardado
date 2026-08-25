@@ -61,6 +61,7 @@ public class CardadoGameManager : MonoBehaviour
     public event Action<CardadoPlayerState, int, int> DiePlayed;
     public event Action<int, int> HandCompleted;
     public event Action RoundPlayingCompleted;
+    public event Action RoundResolutionCompleted;
 
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
@@ -327,6 +328,28 @@ public class CardadoGameManager : MonoBehaviour
         RoundDeck.Discard(card);
     }
 
+    /// <summary>
+    /// Settles the round call after all hands have been played.
+    /// A correct prediction earns the player's round chip bet; an incorrect
+    /// prediction costs that bet. This round economy is separate from War,
+    /// where chips are transferred directly between players.
+    /// </summary>
+    public void ResolveRound()
+    {
+        if (Phase != CardadoGamePhase.RoundResolution)
+            throw new InvalidOperationException("The round is not ready for resolution.");
+
+        foreach (var player in players)
+        {
+            bool predictionCorrect = player.handsWon == player.diceBid;
+            int chipChange = predictionCorrect ? player.roundBet : -player.roundBet;
+            player.chips = Math.Max(0, player.chips + chipChange);
+        }
+
+        RoundResolutionCompleted?.Invoke();
+        SetPhase(CardadoGamePhase.WarResolution);
+    }
+
     private void CompleteCurrentHand()
     {
         int winnerIndex = CurrentHandWinnerIndex;
@@ -341,6 +364,7 @@ public class CardadoGameManager : MonoBehaviour
             CurrentHandPlayerIndex = -1;
             RoundPlayingCompleted?.Invoke();
             SetPhase(CardadoGamePhase.RoundResolution);
+            ResolveRound();
             return;
         }
 
