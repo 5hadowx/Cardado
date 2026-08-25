@@ -12,7 +12,9 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
     private bool showDealerChoice;
     private bool showBettingChoice;
+    private bool showDieChoice;
     private int bettingPlayerIndex = -1;
+    private int handPlayerIndex = -1;
     private int selectedChipBet = 1;
     private int selectedDiceBid = -1;
     private GUIStyle panelStyle;
@@ -43,6 +45,10 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.PlayerDiceRolled += OnPlayerDiceRolled;
         gameManager.BettingTurnStarted += OnBettingTurnStarted;
         gameManager.BettingCompleted += OnBettingCompleted;
+        gameManager.HandTurnStarted += OnHandTurnStarted;
+        gameManager.DiePlayed += OnDiePlayed;
+        gameManager.HandCompleted += OnHandCompleted;
+        gameManager.RoundPlayingCompleted += OnRoundPlayingCompleted;
 
         Debug.Log("=== CARDADO DEVELOPMENT TEST ===");
         Debug.Log($"Dealer: Player {dealerPlayerIndex + 1}");
@@ -116,9 +122,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         Debug.Log("[Cardado] All players have placed their round calls.");
 
         foreach (CardadoPlayerState player in gameManager.Players)
-        {
             Debug.Log($"[Cardado] {player.playerId}: bet {player.roundBet} chip(s), predicts {player.diceBid} dice win(s).");
-        }
 
         try
         {
@@ -130,6 +134,36 @@ public class CardadoDevelopmentTester : MonoBehaviour
         }
     }
 
+    private void OnHandTurnStarted(CardadoPlayerState player, int handNumber, int handStarterIndex)
+    {
+        handPlayerIndex = gameManager.Players.IndexOf(player);
+        showDieChoice = true;
+        Debug.Log($"[Cardado] HAND {handNumber}: {player.playerId} chooses a die. Hand starter: Player {handStarterIndex + 1}.");
+    }
+
+    private void OnDiePlayed(CardadoPlayerState player, int dieIndex, int dieValue)
+    {
+        Debug.Log($"[Cardado] {player.playerId} played die #{dieIndex + 1}: {dieValue}.");
+    }
+
+    private void OnHandCompleted(int winnerPlayerIndex, int winningValue)
+    {
+        showDieChoice = false;
+        handPlayerIndex = -1;
+        CardadoPlayerState winner = gameManager.Players[winnerPlayerIndex];
+        Debug.Log($"[Cardado] HAND {gameManager.CurrentHandNumber} winner: {winner.playerId} with {winningValue}. Hands won: {winner.handsWon}.");
+    }
+
+    private void OnRoundPlayingCompleted()
+    {
+        showDieChoice = false;
+        handPlayerIndex = -1;
+        Debug.Log("[Cardado] All dice have been played. Round is ready for resolution.");
+
+        foreach (CardadoPlayerState player in gameManager.Players)
+            Debug.Log($"[Cardado] {player.playerId}: {player.handsWon} hand(s) won, prediction {player.diceBid}.");
+    }
+
     private void OnGUI()
     {
         if (showDealerChoice && gameManager != null && gameManager.PendingDealerDecision.HasValue)
@@ -139,7 +173,13 @@ public class CardadoDevelopmentTester : MonoBehaviour
         }
 
         if (showBettingChoice && gameManager != null && bettingPlayerIndex >= 0)
+        {
             DrawBettingPanel();
+            return;
+        }
+
+        if (showDieChoice && gameManager != null && handPlayerIndex >= 0)
+            DrawDieChoicePanel();
     }
 
     private void DrawDealerChoicePanel()
@@ -169,12 +209,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
         for (int value = 1; value <= 5; value++)
         {
-            Rect buttonRect = new Rect(
-                startX + (value - 1) * (buttonWidth + spacing),
-                panel.y + 120f,
-                buttonWidth,
-                60f);
-
+            Rect buttonRect = new Rect(startX + (value - 1) * (buttonWidth + spacing), panel.y + 120f, buttonWidth, 60f);
             if (GUI.Button(buttonRect, value.ToString(), buttonStyle))
                 ResolveDealerChoice(value);
         }
@@ -195,7 +230,6 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
         GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
             $"{player.playerId} — ROUND CALL", titleStyle);
-
         GUI.Label(new Rect(panel.x + 25f, panel.y + 68f, width - 50f, 30f),
             $"Choose chips to bet (minimum 1, maximum {maximumChipBet}).", GUI.skin.label);
 
@@ -239,6 +273,41 @@ public class CardadoDevelopmentTester : MonoBehaviour
             GUI.Label(confirmRect, "Select both the chip bet and dice prediction.", GUI.skin.label);
     }
 
+    private void DrawDieChoicePanel()
+    {
+        EnsureStyles();
+
+        CardadoPlayerState player = gameManager.Players[handPlayerIndex];
+        int availableDice = gameManager.GetAvailableDieCount(handPlayerIndex);
+        const float width = 760f;
+        const float height = 300f;
+        Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+
+        GUI.Box(panel, GUIContent.none, panelStyle);
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
+            $"{player.playerId} — CHOOSE A DIE", titleStyle);
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 68f, width - 50f, 30f),
+            "Card effects are not implemented yet. Choose a die directly for this test.", GUI.skin.label);
+
+        float buttonWidth = 90f;
+        float spacing = 12f;
+        float totalWidth = gameManager.RoundDiceCount * buttonWidth + (gameManager.RoundDiceCount - 1) * spacing;
+        float startX = panel.x + (width - totalWidth) * 0.5f;
+
+        for (int dieIndex = 0; dieIndex < player.dice.Count; dieIndex++)
+        {
+            if (!gameManager.IsDieAvailable(handPlayerIndex, dieIndex))
+                continue;
+
+            Rect buttonRect = new Rect(startX + dieIndex * (buttonWidth + spacing), panel.y + 125f, buttonWidth, 70f);
+            if (GUI.Button(buttonRect, $"Die {dieIndex + 1}\n{player.dice[dieIndex]}", buttonStyle))
+                ResolveDieChoice(dieIndex);
+        }
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 215f, width - 50f, 30f),
+            $"Available dice: {availableDice} / {gameManager.RoundDiceCount}", GUI.skin.label);
+    }
+
     private void ResolveDealerChoice(int value)
     {
         try
@@ -257,6 +326,19 @@ public class CardadoDevelopmentTester : MonoBehaviour
         {
             if (!gameManager.TryPlaceRoundCall(bettingPlayerIndex, selectedChipBet, selectedDiceBid))
                 Debug.LogWarning($"[Cardado] Round call rejected for Player {bettingPlayerIndex + 1}: {selectedChipBet} chip(s), {selectedDiceBid} dice.");
+        }
+        catch (System.Exception exception)
+        {
+            Debug.LogException(exception);
+        }
+    }
+
+    private void ResolveDieChoice(int dieIndex)
+    {
+        try
+        {
+            if (!gameManager.TryPlayDie(handPlayerIndex, dieIndex))
+                Debug.LogWarning($"[Cardado] Die choice rejected for Player {handPlayerIndex + 1}: die {dieIndex + 1}.");
         }
         catch (System.Exception exception)
         {
@@ -305,5 +387,9 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.PlayerDiceRolled -= OnPlayerDiceRolled;
         gameManager.BettingTurnStarted -= OnBettingTurnStarted;
         gameManager.BettingCompleted -= OnBettingCompleted;
+        gameManager.HandTurnStarted -= OnHandTurnStarted;
+        gameManager.DiePlayed -= OnDiePlayed;
+        gameManager.HandCompleted -= OnHandCompleted;
+        gameManager.RoundPlayingCompleted -= OnRoundPlayingCompleted;
     }
 }
