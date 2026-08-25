@@ -41,6 +41,8 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
     private FieldInfo warUiVisibilityField;
     private FieldInfo challengerHandsWonField;
     private FieldInfo targetHandsWonField;
+    private FieldInfo testerShowDieChoiceField;
+    private FieldInfo testerShowBettingChoiceField;
 
     private void Awake()
     {
@@ -50,12 +52,20 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
         if (warManager == null)
             warManager = FindFirstObjectByType<CardadoWarManager>();
 
+        const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+
         if (warManager != null)
         {
-            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
             warUiVisibilityField = typeof(CardadoWarManager).GetField("showTemporaryUi", flags);
             challengerHandsWonField = typeof(CardadoWarManager).GetField("challengerHandsWon", flags);
             targetHandsWonField = typeof(CardadoWarManager).GetField("targetHandsWon", flags);
+        }
+
+        CardadoDevelopmentTester tester = FindFirstObjectByType<CardadoDevelopmentTester>();
+        if (tester != null)
+        {
+            testerShowDieChoiceField = typeof(CardadoDevelopmentTester).GetField("showDieChoice", flags);
+            testerShowBettingChoiceField = typeof(CardadoDevelopmentTester).GetField("showBettingChoice", flags);
         }
     }
 
@@ -110,6 +120,7 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
         wagerAmount = 0;
         step = OverlayStep.Claim;
         SetWarManagerUi(false);
+        SetNormalTesterPanels(false);
     }
 
     private void SetWarManagerUi(bool visible)
@@ -118,6 +129,15 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
             return;
 
         warUiVisibilityField.SetValue(warManager, visible);
+    }
+
+    private void SetNormalTesterPanels(bool visible)
+    {
+        if (testerShowDieChoiceField != null)
+            testerShowDieChoiceField.SetValue(FindFirstObjectByType<CardadoDevelopmentTester>(), visible);
+
+        if (testerShowBettingChoiceField != null)
+            testerShowBettingChoiceField.SetValue(FindFirstObjectByType<CardadoDevelopmentTester>(), visible);
     }
 
     private void ChooseClaim(int playerIndex)
