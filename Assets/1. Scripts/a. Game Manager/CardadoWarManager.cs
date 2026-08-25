@@ -15,6 +15,7 @@ public class CardadoWarManager : MonoBehaviour
     {
         Claim,
         Target,
+        Wager,
         Order,
         Playing,
         Complete
@@ -27,8 +28,10 @@ public class CardadoWarManager : MonoBehaviour
     private readonly HashSet<int> claimedPlayers = new HashSet<int>();
 
     private WarUiStep uiStep;
+    private int currentClaimPosition;
     private int challengerIndex = -1;
     private int targetIndex = -1;
+    private int warWager;
     private bool challengerPlaysFirst;
 
     private readonly List<int> challengerDice = new List<int>();
@@ -88,12 +91,14 @@ public class CardadoWarManager : MonoBehaviour
         claimedPlayers.Clear();
         challengerIndex = -1;
         targetIndex = -1;
+        warWager = 0;
         warResolved = false;
+        currentClaimPosition = 0;
         uiStep = WarUiStep.Claim;
 
-        // Until the round manager exposes the complete turn-order history, use the
-        // final hand starter as the deterministic inspection order. The exact
-        // previous-round order can later be supplied directly by RoundState.
+        // StartingPlayerIndex is the first player to act after the dealer in the
+        // normal round flow, so War uses the same clockwise order:
+        // starting player -> next player -> ... -> dealer.
         int start = gameManager.StartingPlayerIndex;
         if (start < 0)
             start = 0;
@@ -101,13 +106,52 @@ public class CardadoWarManager : MonoBehaviour
         for (int offset = 0; offset < gameManager.Players.Count; offset++)
         {
             int index = (start + offset) % gameManager.Players.Count;
-            if (CanClaimWar(index))
-                claimOrder.Add(index);
+            claimOrder.Add(index);
         }
 
-        Debug.Log($"[Cardado] War phase started. Eligible war claimants: {claimOrder.Count}.");
-        if (claimOrder.Count == 0)
-            Debug.Log("[Cardado] No player currently has a valid war claim. War phase is complete for this test.");
+        Debug.Log($"[Cardado] War phase started. Claim order: {BuildClaimOrderLabel()}.");
+        AdvanceToCurrentClaimant();
+    }
+
+    private string BuildClaimOrderLabel()
+    {
+        List<string> names = new List<string>();
+
+        foreach (int index in claimOrder)
+        {
+            if (index >= 0 && index < gameManager.Players.Count)
+                names.Add(gameManager.Players[index].playerId);
+        }
+
+        return string.Join(" -> ", names);
+    }
+
+    private void AdvanceToCurrentClaimant()
+    {
+        challengerIndex = -1;
+        targetIndex = -1;
+        warWager = 0;
+        warResolved = false;
+        uiStep = WarUiStep.Claim;
+
+        while (currentClaimPosition < claimOrder.Count)
+        {
+            int playerIndex = claimOrder[currentClaimPosition];
+
+            // Eligibility is checked when the player gets their turn. This is
+            // intentional because earlier wars can change chip totals.
+            if (CanClaimWar(playerIndex))
+            {
+                Debug.Log($"[Cardado] WAR CLAIM TURN: {gameManager.Players[playerIndex].playerId}.");
+                return;
+            }
+
+            Debug.Log($"[Cardado] WAR PASS: {gameManager.Players[playerIndex].playerId} has no valid war claim or cannot afford the minimum wager.");
+            currentClaimPosition++;
+        }
+
+        uiStep = WarUiStep.Complete;
+        Debug.Log("[Cardado] War claim sequence complete. No further player may declare a war.");
     }
 
     public bool CanClaimWar(int playerIndex)
@@ -118,17 +162,39 @@ public class CardadoWarManager : MonoBehaviour
         if (claimedPlayers.Contains(playerIndex))
             return false;
 
+        if (gameManager.Players[playerIndex].chips < 1)
+            return false;
+
         return HasWarClaim(gameManager.Players[playerIndex].hand.cardsInHand);
     }
 
     public bool TryClaimWar(int playerIndex)
     {
-        if (uiStep != WarUiStep.Claim || !CanClaimWar(playerIndex))
+        if (uiStep != WarUiStep.Claim || currentClaimPosition >= claimOrder.Count)
+            return false;
+
+        int expectedPlayer = claimOrder[currentClaimPosition];
+        if (playerIndex != expectedPlayer || !CanClaimWar(playerIndex))
             return false;
 
         challengerIndex = playerIndex;
         uiStep = WarUiStep.Target;
         Debug.Log($"[Cardado] WAR CLAIMED: {gameManager.Players[playerIndex].playerId}.");
+        return true;
+    }
+
+    public bool TryPassWar(int playerIndex)
+    {
+        if (uiStep != WarUiStep.Claim || currentClaimPosition >= claimOrder.Count)
+            return false;
+
+        int expectedPlayer = claimOrder[currentClaimPosition];
+        if (playerIndex != expectedPlayer)
+            return false;
+
+        Debug.Log($"[Cardado] WAR PASS: {gameManager.Players[playerIndex].playerId} chose not to declare a war.");
+        currentClaimPosition++;
+        AdvanceToCurrentClaimant();
         return true;
     }
 
@@ -141,8 +207,34 @@ public class CardadoWarManager : MonoBehaviour
             return false;
 
         targetIndex = playerIndex;
-        uiStep = WarUiStep.Order;
+        uiStep = WarUiStep.Wager;
         Debug.Log($"[Cardado] WAR TARGET: {gameManager.Players[targetIndex].playerId}. Target cannot decline.");
+        return true;
+    }
+
+    public bool TryChooseWarWager(int wager)
+    {
+        if (uiStep != WarUiStep.Wager || challengerIndex < 0 || targetIndex < 0)
+            return false;
+
+        if (wager < 1 || wager > 2)
+            return false;
+
+        if (gameManager.Players[challengerIndex].chips < wager)
+            return false;
+
+        if (gameManager.Players[targetIndex].chips < wager)
+        {
+            Debug.LogWarning($"[Cardado] WAR WAGER REJECTED: {gameManager.Players[targetIndex].playerId} only has " +
+                             $"{gameManager.Players[targetIndex].chips} chip(s).");
+            return false;
+        }
+
+        warWager = wager;
+        uiStep = WarUiStep.Order;
+
+        Debug.Log($"[Cardado] WAR WAGER: {gameManager.Players[challengerIndex].playerId} wagers {warWager} chip(s) " +
+                  $"against {gameManager.Players[targetIndex].playerId}.");
         return true;
     }
 
@@ -241,7 +333,7 @@ public class CardadoWarManager : MonoBehaviour
     private void ResolveWar(int winnerIndex)
     {
         int loserIndex = winnerIndex == challengerIndex ? targetIndex : challengerIndex;
-        int transfer = Math.Min(1, gameManager.Players[loserIndex].chips);
+        int transfer = Math.Min(warWager, gameManager.Players[loserIndex].chips);
 
         if (transfer > 0)
         {
@@ -251,7 +343,8 @@ public class CardadoWarManager : MonoBehaviour
 
         Debug.Log($"[Cardado] WAR RESOLVED: {gameManager.Players[winnerIndex].playerId} wins " +
                   $"{challengerHandsWon}-{targetHandsWon}. " +
-                  $"Transferred {transfer} chip(s) from {gameManager.Players[loserIndex].playerId}.");
+                  $"Transferred {transfer} chip(s) from {gameManager.Players[loserIndex].playerId}. " +
+                  $"Wager was {warWager}.");
 
         claimedPlayers.Add(challengerIndex);
         warResolved = true;
@@ -383,6 +476,8 @@ public class CardadoWarManager : MonoBehaviour
             DrawClaimPanel(panel, width);
         else if (uiStep == WarUiStep.Target)
             DrawTargetPanel(panel, width);
+        else if (uiStep == WarUiStep.Wager)
+            DrawWagerPanel(panel, width);
         else if (uiStep == WarUiStep.Order)
             DrawOrderPanel(panel, width);
         else if (uiStep == WarUiStep.Playing)
@@ -393,45 +488,95 @@ public class CardadoWarManager : MonoBehaviour
 
     private void DrawClaimPanel(Rect panel, float width)
     {
-        GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CLAIM", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35), "Players with a valid 3-card claim may declare a war.", GUI.skin.label);
-
-        float y = panel.y + 120;
-        bool any = false;
-        foreach (int playerIndex in claimOrder)
+        if (currentClaimPosition >= claimOrder.Count)
         {
-            if (!CanClaimWar(playerIndex))
-                continue;
-
-            any = true;
-            CardadoPlayerState player = gameManager.Players[playerIndex];
-            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), $"{player.playerId} — CLAIM WAR", buttonStyle))
-                TryClaimWar(playerIndex);
-            y += 65;
+            DrawCompletePanel(panel, width);
+            return;
         }
 
-        if (!any)
+        CardadoPlayerState player = gameManager.Players[claimOrder[currentClaimPosition]];
+
+        GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — DECLARE OR PASS", titleStyle);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
+            $"{player.playerId} — your turn to declare a war.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30),
+            $"Chips: {player.chips}    Claim: {HasWarClaim(player.hand.cardsInHand)}", GUI.skin.label);
+
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60),
+            "DECLARE WAR", buttonStyle))
         {
-            GUI.Label(new Rect(panel.x + 25, y, width - 50, 40), "No eligible wars remain.", GUI.skin.label);
-            GUI.Label(new Rect(panel.x + 25, y + 50, width - 50, 40), "War phase complete for this test.", GUI.skin.label);
+            TryClaimWar(claimOrder[currentClaimPosition]);
         }
+
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 230, width - 50, 60),
+            "PASS", buttonStyle))
+        {
+            TryPassWar(claimOrder[currentClaimPosition]);
+        }
+
+        GUI.Label(new Rect(panel.x + 25, panel.y + 320, width - 50, 30),
+            $"War order: {BuildClaimOrderLabel()}", GUI.skin.label);
     }
 
     private void DrawTargetPanel(Rect panel, float width)
     {
+        CardadoPlayerState challenger = gameManager.Players[challengerIndex];
+
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE OPPONENT", titleStyle);
         GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
-            $"{gameManager.Players[challengerIndex].playerId} challenges any opponent. The opponent cannot decline.", GUI.skin.label);
+            $"{challenger.playerId} challenges any opponent. The opponent cannot decline.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30),
+            $"Challenger chips: {challenger.chips}", GUI.skin.label);
 
-        float y = panel.y + 125;
+        float y = panel.y + 150;
         for (int i = 0; i < gameManager.Players.Count; i++)
         {
             if (i == challengerIndex)
                 continue;
 
-            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), gameManager.Players[i].playerId, buttonStyle))
+            CardadoPlayerState target = gameManager.Players[i];
+            string label = $"{target.playerId} — {target.chips} chip(s)";
+
+            bool canBeTarget = target.chips >= 1;
+            GUI.enabled = canBeTarget;
+
+            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), label, buttonStyle))
                 TryChooseTarget(i);
+
+            GUI.enabled = true;
             y += 65;
+        }
+
+        GUI.Label(new Rect(panel.x + 25, panel.y + 430, width - 50, 30),
+            "A target must have at least 1 chip available for the minimum war wager.", GUI.skin.label);
+    }
+
+    private void DrawWagerPanel(Rect panel, float width)
+    {
+        CardadoPlayerState challenger = gameManager.Players[challengerIndex];
+        CardadoPlayerState target = gameManager.Players[targetIndex];
+
+        GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE WAGER", titleStyle);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
+            $"{challenger.playerId} chooses the wager. {target.playerId} cannot decline.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30),
+            $"{challenger.playerId}: {challenger.chips} chips    vs    {target.playerId}: {target.chips} chips", GUI.skin.label);
+
+        GUI.Label(new Rect(panel.x + 25, panel.y + 145, width - 50, 30),
+            "Choose 1 or 2 chips. Both players must be able to cover the wager.", GUI.skin.label);
+
+        for (int wager = 1; wager <= 2; wager++)
+        {
+            bool canWager = challenger.chips >= wager && target.chips >= wager;
+            GUI.enabled = canWager;
+
+            if (GUI.Button(new Rect(panel.x + 25, panel.y + 195 + (wager - 1) * 80, width - 50, 60),
+                $"{wager} CHIP{(wager == 1 ? "" : "S")}", buttonStyle))
+            {
+                TryChooseWarWager(wager);
+            }
+
+            GUI.enabled = true;
         }
     }
 
@@ -491,22 +636,41 @@ public class CardadoWarManager : MonoBehaviour
 
     private void DrawCompletePanel(Rect panel, float width)
     {
-        GUI.Label(new Rect(panel.x + 25, panel.y + 30, width - 50, 45), "WAR RESOLVED", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35),
-            "The chip transfer is complete. War/match continuation will be wired next.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 30, width - 50, 45), "WAR PHASE COMPLETE", titleStyle);
+        string message = warResolved
+            ? $"War resolved. {gameManager.Players[challengerIndex].playerId} has completed their war declaration."
+            : "All players have had their opportunity to declare a war.";
 
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "CONTINUE TEST", selectedButtonStyle))
-            AdvanceToNextClaim();
-    }
+        GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35), message, GUI.skin.label);
 
-    private void AdvanceToNextClaim()
-    {
-        challengerIndex = -1;
-        targetIndex = -1;
-        warResolved = false;
-        uiStep = WarUiStep.Claim;
+        if (warResolved)
+        {
+            if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60),
+                "CONTINUE TO NEXT PLAYER", selectedButtonStyle))
+            {
+                currentClaimPosition++;
+                AdvanceToCurrentClaimant();
+            }
 
-        Debug.Log("[Cardado] Returning to war claim selection for the next possible war.");
+            return;
+        }
+
+        if (currentClaimPosition < claimOrder.Count)
+        {
+            GUI.Label(new Rect(panel.x + 25, panel.y + 140, width - 50, 35),
+                "Continue the claim sequence to the next player.", GUI.skin.label);
+
+            if (GUI.Button(new Rect(panel.x + 25, panel.y + 195, width - 50, 60),
+                "CONTINUE", selectedButtonStyle))
+            {
+                AdvanceToCurrentClaimant();
+            }
+
+            return;
+        }
+
+        GUI.Label(new Rect(panel.x + 25, panel.y + 140, width - 50, 35),
+            "War/match continuation will be wired next.", GUI.skin.label);
     }
 
     private void EnsureStyles()
