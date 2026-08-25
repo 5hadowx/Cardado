@@ -21,14 +21,33 @@ public class CardadoDevelopmentCardLogger : MonoBehaviour
         loggerObject.AddComponent<CardadoDevelopmentCardLogger>();
     }
 
-    private void Start()
+    private void Awake()
     {
+        // Subscribe in Awake, not Start. The development tester can begin the
+        // match from Start, so waiting until Start could miss PlayerHandDealt.
         gameManager = FindFirstObjectByType<CardadoGameManager>();
         if (gameManager == null)
             return;
 
         gameManager.PlayerHandDealt += OnPlayerHandDealt;
         gameManager.PhaseChanged += OnPhaseChanged;
+    }
+
+    private void Start()
+    {
+        // Safety net: if the logger was created after the hands were already dealt,
+        // print the current hands once anyway.
+        if (gameManager == null)
+            gameManager = FindFirstObjectByType<CardadoGameManager>();
+
+        if (gameManager == null)
+            return;
+
+        foreach (CardadoPlayerState player in gameManager.Players)
+        {
+            if (player != null && player.hand != null && player.hand.cardsInHand != null && player.hand.cardsInHand.Count > 0)
+                LogPlayerHand(player);
+        }
     }
 
     private void OnDestroy()
@@ -41,6 +60,11 @@ public class CardadoDevelopmentCardLogger : MonoBehaviour
     }
 
     private void OnPlayerHandDealt(CardadoPlayerState player)
+    {
+        LogPlayerHand(player);
+    }
+
+    private void LogPlayerHand(CardadoPlayerState player)
     {
         if (player == null || player.hand == null || player.hand.cardsInHand == null)
         {
