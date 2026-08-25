@@ -38,6 +38,11 @@ public class CardadoGameManager : MonoBehaviour
     public int DealerPlayerIndex { get; private set; } = -1;
     public int StartingPlayerIndex { get; private set; } = -1;
     public int CurrentBettingPlayerIndex { get; private set; } = -1;
+    public int CurrentHandStarterIndex { get; private set; } = -1;
+    public int CurrentHandPlayerIndex { get; private set; } = -1;
+    public int CurrentHandNumber { get; private set; }
+    public int CurrentHandWinnerIndex { get; private set; } = -1;
+    public int CurrentHandWinningValue { get; private set; }
     public int RoundDiceCount { get; private set; }
     public int RoundCardCount { get; private set; }
     public RoundSetupRoll SetupRoll { get; private set; }
@@ -52,10 +57,16 @@ public class CardadoGameManager : MonoBehaviour
     public event Action<CardadoPlayerState> PlayerDiceRolled;
     public event Action<CardadoPlayerState, int> BettingTurnStarted;
     public event Action BettingCompleted;
+    public event Action<CardadoPlayerState, int, int> HandTurnStarted;
+    public event Action<CardadoPlayerState, int, int> DiePlayed;
+    public event Action<int, int> HandCompleted;
+    public event Action RoundPlayingCompleted;
 
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
     private Queue<RoundSetupDecisionType> pendingDealerDecisions;
+
+    private int handTurnsCompleted;
 
     private void Awake()
     {
@@ -110,9 +121,8 @@ public class CardadoGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Completes the round setup in the physical-game order: deal the round hand,
-    /// roll each player's round dice, then begin betting. Players therefore know
-    /// both their cards and their rolled dice before making their prediction.
+    /// Completes round setup in the physical-game order: deal cards, roll each
+    /// player's hidden dice, then begin betting.
     /// </summary>
     public void BeginBetting()
     {
@@ -132,12 +142,9 @@ public class CardadoGameManager : MonoBehaviour
     }
 
     /// <summary>
-    /// Places both parts of the round call atomically: the chip amount wagered
-    /// and the number of dice the player predicts they will win.
-    /// The chip bet is at least 1 and is limited by the player's chips and the match cap.
-    /// The dice prediction is independent of the chip amount and ranges from 0 to
-    /// the number of dice in the round. The dealer has the additional final-call
-    /// restriction that the total predictions cannot equal the total dice count.
+    /// Places both parts of the round call atomically: chip wager and predicted
+    /// number of dice won. The dealer's final-call restriction prevents the total
+    /// predictions from matching the round dice count.
     /// </summary>
     public bool TryPlaceRoundCall(int playerIndex, int chipBet, int dicePrediction)
     {
@@ -231,13 +238,85 @@ public class CardadoGameManager : MonoBehaviour
         if (Phase != CardadoGamePhase.Betting || !AreBidsValid())
             throw new InvalidOperationException("Bidding is incomplete or invalid.");
 
+        CurrentHandNumber = 1;
+        CurrentHandStarterIndex = StartingPlayerIndex;
+        CurrentHandPlayerIndex = StartingPlayerIndex;
+        CurrentHandWinnerIndex = -1;
+        CurrentHandWinningValue = 0;
+        handTurnsCompleted = 0;
+
         SetPhase(CardadoGamePhase.PlayingHands);
+        NotifyHandTurnStarted();
+    }
+
+    /// <summary>
+    /// Plays one die for the current player. Dice are indexed from zero and a value
+    /// of zero means that die has already been played. Card effects are deliberately
+    /// not resolved here yet; the future card-action step will modify the player's
+    /// available dice before this method is called.
+    /// </summary>
+    public bool TryPlayDie(int playerIndex, int dieIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+
+        if (Phase != CardadoGamePhase.PlayingHands || playerIndex != CurrentHandPlayerIndex)
+            return false;
+
+        CardadoPlayerState player = players[playerIndex];
+        if (dieIndex < 0 || dieIndex >= player.dice.Count)
+            return false;
+
+        int dieValue = player.dice[dieIndex];
+        if (dieValue <= 0)
+            return false;
+
+        player.dice[dieIndex] = 0;
+        handTurnsCompleted++;
+
+        if (handTurnsCompleted == 1 || dieValue > CurrentHandWinningValue)
+        {
+            CurrentHandWinningValue = dieValue;
+            CurrentHandWinnerIndex = playerIndex;
+        }
+
+        DiePlayed?.Invoke(player, dieIndex, dieValue);
+
+        if (handTurnsCompleted < players.Count)
+        {
+            CurrentHandPlayerIndex = GetNextPlayerIndex(playerIndex);
+            NotifyHandTurnStarted();
+            return true;
+        }
+
+        CompleteCurrentHand();
+        return true;
+    }
+
+    public int GetAvailableDieCount(int playerIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+
+        int count = 0;
+        foreach (int die in players[playerIndex].dice)
+        {
+            if (die > 0)
+                count++;
+        }
+
+        return count;
+    }
+
+    public bool IsDieAvailable(int playerIndex, int dieIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+        return dieIndex >= 0 && dieIndex < players[playerIndex].dice.Count && players[playerIndex].dice[dieIndex] > 0;
     }
 
     public void SetNextHandStarter(int winnerPlayerIndex)
     {
         ValidatePlayerIndex(winnerPlayerIndex);
         StartingPlayerIndex = winnerPlayerIndex;
+        CurrentHandStarterIndex = winnerPlayerIndex;
     }
 
     public void DiscardResolvedCard(CardInstance card)
@@ -246,6 +325,42 @@ public class CardadoGameManager : MonoBehaviour
             throw new InvalidOperationException("The round deck has not been initialized.");
 
         RoundDeck.Discard(card);
+    }
+
+    private void CompleteCurrentHand()
+    {
+        int winnerIndex = CurrentHandWinnerIndex;
+        players[winnerIndex].handsWon++;
+        StartingPlayerIndex = winnerIndex;
+        CurrentHandStarterIndex = winnerIndex;
+
+        HandCompleted?.Invoke(winnerIndex, CurrentHandWinningValue);
+
+        if (CurrentHandNumber >= RoundDiceCount)
+        {
+            CurrentHandPlayerIndex = -1;
+            RoundPlayingCompleted?.Invoke();
+            SetPhase(CardadoGamePhase.RoundResolution);
+            return;
+        }
+
+        CurrentHandNumber++;
+        CurrentHandPlayerIndex = winnerIndex;
+        CurrentHandWinnerIndex = -1;
+        CurrentHandWinningValue = 0;
+        handTurnsCompleted = 0;
+        NotifyHandTurnStarted();
+    }
+
+    private void NotifyHandTurnStarted()
+    {
+        if (CurrentHandPlayerIndex < 0)
+            return;
+
+        HandTurnStarted?.Invoke(
+            players[CurrentHandPlayerIndex],
+            CurrentHandNumber,
+            CurrentHandStarterIndex);
     }
 
     private void DealInitialHands()
@@ -258,6 +373,8 @@ public class CardadoGameManager : MonoBehaviour
 
         foreach (var player in players)
         {
+            player.hand.cardsInHand.Clear();
+
             for (int i = 0; i < RoundCardCount; i++)
             {
                 CardInstance card = RoundDeck.Draw();
