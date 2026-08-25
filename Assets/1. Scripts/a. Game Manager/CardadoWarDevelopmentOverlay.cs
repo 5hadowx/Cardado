@@ -39,6 +39,8 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
     private GUIStyle buttonStyle;
 
     private FieldInfo warUiVisibilityField;
+    private FieldInfo challengerHandsWonField;
+    private FieldInfo targetHandsWonField;
 
     private void Awake()
     {
@@ -50,9 +52,10 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
 
         if (warManager != null)
         {
-            warUiVisibilityField = typeof(CardadoWarManager).GetField(
-                "showTemporaryUi",
-                BindingFlags.Instance | BindingFlags.NonPublic);
+            const BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            warUiVisibilityField = typeof(CardadoWarManager).GetField("showTemporaryUi", flags);
+            challengerHandsWonField = typeof(CardadoWarManager).GetField("challengerHandsWon", flags);
+            targetHandsWonField = typeof(CardadoWarManager).GetField("targetHandsWon", flags);
         }
     }
 
@@ -89,6 +92,7 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
 
         if (step == OverlayStep.Playing && !warManager.WarInProgress)
         {
+            ResolveWagerWinner();
             ApplyAdditionalWagerTransferIfNeeded();
             step = OverlayStep.Complete;
             SetWarManagerUi(true);
@@ -140,7 +144,7 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
         if (challengerIndex < 0 || challengerIndex >= gameManager.Players.Count)
             return;
 
-        if (amount < 1 || amount > 2 || amount > gameManager.Players[challengerIndex].chips)
+        if (amount < 1 || amount > 2)
             return;
 
         selectedWager = amount;
@@ -155,6 +159,8 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
 
         wagerAmount = selectedWager;
         wagerApplied = false;
+        wagerWinner = -1;
+        wagerLoser = -1;
         SetWarManagerUi(true);
 
         if (!warManager.TryChooseWarOrder(challengerFirst))
@@ -166,25 +172,48 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
         step = OverlayStep.Playing;
     }
 
-    private void ApplyAdditionalWagerTransferIfNeeded()
+    private void ResolveWagerWinner()
     {
-        if (wagerApplied || wagerAmount <= 1 || wagerWinner < 0 || wagerLoser < 0)
+        if (challengerHandsWonField == null || targetHandsWonField == null)
             return;
 
-        int currentWinner = wagerWinner;
-        int currentLoser = wagerLoser;
-        int remaining = wagerAmount - 1;
-        int transfer = Math.Min(remaining, gameManager.Players[currentLoser].chips);
+        int challengerHands = (int)challengerHandsWonField.GetValue(warManager);
+        int targetHands = (int)targetHandsWonField.GetValue(warManager);
+
+        if (challengerHands == targetHands)
+            return;
+
+        if (challengerHands > targetHands)
+        {
+            wagerWinner = challengerIndex;
+            wagerLoser = targetIndex;
+        }
+        else
+        {
+            wagerWinner = targetIndex;
+            wagerLoser = challengerIndex;
+        }
+    }
+
+    private void ApplyAdditionalWagerTransferIfNeeded()
+    {
+        if (wagerApplied || wagerWinner < 0 || wagerLoser < 0)
+            return;
+
+        // CardadoWarManager already transfers one chip when the War resolves.
+        // This overlay adds the second chip when the challenger selected a 2-chip wager.
+        int remaining = Mathf.Max(0, wagerAmount - 1);
+        int transfer = Mathf.Min(remaining, gameManager.Players[wagerLoser].chips);
 
         if (transfer > 0)
         {
-            gameManager.Players[currentLoser].chips -= transfer;
-            gameManager.Players[currentWinner].chips += transfer;
+            gameManager.Players[wagerLoser].chips -= transfer;
+            gameManager.Players[wagerWinner].chips += transfer;
         }
 
-        Debug.Log($"[Cardado] WAR WAGER SETTLED: transferred an additional {transfer} chip(s). " +
-                  $"Winner: {gameManager.Players[currentWinner].playerId} ({gameManager.Players[currentWinner].chips} chips), " +
-                  $"Loser: {gameManager.Players[currentLoser].playerId} ({gameManager.Players[currentLoser].chips} chips).");
+        Debug.Log($"[Cardado] WAR WAGER SETTLED: wager {wagerAmount}, additional transfer {transfer}. " +
+                  $"Winner: {gameManager.Players[wagerWinner].playerId} ({gameManager.Players[wagerWinner].chips} chips), " +
+                  $"Loser: {gameManager.Players[wagerLoser].playerId} ({gameManager.Players[wagerLoser].chips} chips).");
 
         wagerApplied = true;
     }
@@ -302,18 +331,12 @@ public class CardadoWarDevelopmentOverlay : MonoBehaviour
             "Choose the War wager. The target cannot decline.", GUI.skin.label);
 
         float y = panel.y + 205;
-        if (challenger.chips >= 1)
-        {
-            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), "BET 1 CHIP", buttonStyle))
-                ChooseWager(1);
-            y += 65;
-        }
+        if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), "BET 1 CHIP", buttonStyle))
+            ChooseWager(1);
+        y += 65;
 
-        if (challenger.chips >= 2)
-        {
-            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), "BET 2 CHIPS", buttonStyle))
-                ChooseWager(2);
-        }
+        if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), "BET 2 CHIPS", buttonStyle))
+            ChooseWager(2);
     }
 
     private void DrawOrder(Rect panel, float width)
