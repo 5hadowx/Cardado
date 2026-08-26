@@ -96,9 +96,6 @@ public class CardadoWarManager : MonoBehaviour
         currentClaimPosition = 0;
         uiStep = WarUiStep.Claim;
 
-        // StartingPlayerIndex is the first player to act after the dealer in the
-        // normal round flow, so War uses the same clockwise order:
-        // starting player -> next player -> ... -> dealer.
         int start = gameManager.StartingPlayerIndex;
         if (start < 0)
             start = 0;
@@ -138,8 +135,6 @@ public class CardadoWarManager : MonoBehaviour
         {
             int playerIndex = claimOrder[currentClaimPosition];
 
-            // Eligibility is checked when the player gets their turn. This is
-            // intentional because earlier wars can change chip totals.
             if (CanClaimWar(playerIndex))
             {
                 Debug.Log($"[Cardado] WAR CLAIM TURN: {gameManager.Players[playerIndex].playerId}.");
@@ -267,7 +262,6 @@ public class CardadoWarManager : MonoBehaviour
             targetDice.Add(UnityEngine.Random.Range(1, 7));
         }
 
-        
         currentWarTurn = challengerPlaysFirst ? 0 : 1;
         uiStep = WarUiStep.Playing;
 
@@ -670,7 +664,13 @@ public class CardadoWarManager : MonoBehaviour
         }
 
         GUI.Label(new Rect(panel.x + 25, panel.y + 140, width - 50, 35),
-            "War/match continuation will be wired next.", GUI.skin.label);
+            "All War opportunities are complete. Resolve the match now.", GUI.skin.label);
+
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 195, width - 50, 60),
+            "FINISH WAR PHASE", selectedButtonStyle))
+        {
+            gameManager.CompleteWarPhase();
+        }
     }
 
     private void EnsureStyles()
