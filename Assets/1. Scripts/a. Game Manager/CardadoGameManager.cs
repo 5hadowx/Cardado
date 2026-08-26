@@ -10,10 +10,17 @@ public enum CardadoGamePhase
     Betting,
     RollDice,
     RevealDice,
+    CardActionDecision,
     PlayingHands,
     RoundResolution,
     WarResolution,
     GameOver
+}
+
+public enum CardadoCardActionRequestType
+{
+    ChooseCard,
+    ChooseArtistDie
 }
 
 /// <summary>
@@ -49,6 +56,7 @@ public class CardadoGameManager : MonoBehaviour
     public RoundSetupDecisionType? PendingDealerDecision { get; private set; }
     public Deck RoundDeck { get; private set; }
     public int MatchWinnerIndex { get; private set; } = -1;
+    public CardInstance PendingCardActionCard { get; private set; }
 
     public event Action<CardadoGamePhase> PhaseChanged;
     public event Action<RoundSetupRoll> SetupDiceRolled;
@@ -58,6 +66,9 @@ public class CardadoGameManager : MonoBehaviour
     public event Action<CardadoPlayerState> PlayerDiceRolled;
     public event Action<CardadoPlayerState, int> BettingTurnStarted;
     public event Action BettingCompleted;
+    public event Action<CardadoPlayerState, CardadoCardActionRequestType> CardActionRequested;
+    public event Action<CardadoPlayerState, CardInstance> CardPlayed;
+    public event Action<CardadoPlayerState, CardInstance, int, int> CardEffectResolved;
     public event Action<CardadoPlayerState, int, int> HandTurnStarted;
     public event Action<CardadoPlayerState, int, int> DiePlayed;
     public event Action<int, int> HandCompleted;
@@ -68,7 +79,6 @@ public class CardadoGameManager : MonoBehaviour
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
     private Queue<RoundSetupDecisionType> pendingDealerDecisions;
-
     private int handTurnsCompleted;
 
     private void Awake()
@@ -80,6 +90,11 @@ public class CardadoGameManager : MonoBehaviour
         ValidatePlayerConfiguration();
         BuildPlayers();
         InitializeDeck();
+
+        // Temporary development UI for the card-action pipeline. The real UI will
+        // replace this component later, so no scene wiring is required for testing.
+        if (GetComponent<CardadoCardActionDevelopmentOverlay>() == null)
+            gameObject.AddComponent<CardadoCardActionDevelopmentOverlay>();
     }
 
     public void SetDealer(int playerIndex)
@@ -101,7 +116,6 @@ public class CardadoGameManager : MonoBehaviour
 
         SetupRoll = roundSetup.RollSetupDice();
         pendingDealerDecisions = roundSetup.BuildDealerDecisions(SetupRoll);
-
         SetupDiceRolled?.Invoke(SetupRoll);
         RequestNextDealerDecision();
     }
@@ -123,32 +137,21 @@ public class CardadoGameManager : MonoBehaviour
         RequestNextDealerDecision();
     }
 
-    /// <summary>
-    /// Completes round setup in the physical-game order: deal cards, roll each
-    /// player's hidden dice, then begin betting.
-    /// </summary>
     public void BeginBetting()
     {
         if (Phase != CardadoGamePhase.DealerSetupDecision || PendingDealerDecision.HasValue)
             throw new InvalidOperationException("Round setup is not complete.");
 
         DealInitialHands();
-
         foreach (var player in players)
             player.ResetRoundScore();
 
         RollRoundDiceForPlayers();
-
         CurrentBettingPlayerIndex = StartingPlayerIndex;
         SetPhase(CardadoGamePhase.Betting);
         NotifyBettingTurn();
     }
 
-    /// <summary>
-    /// Places both parts of the round call atomically: chip wager and predicted
-    /// number of dice won. The dealer's final-call restriction prevents the total
-    /// predictions from matching the round dice count.
-    /// </summary>
     public bool TryPlaceRoundCall(int playerIndex, int chipBet, int dicePrediction)
     {
         ValidatePlayerIndex(playerIndex);
@@ -248,16 +251,132 @@ public class CardadoGameManager : MonoBehaviour
         CurrentHandWinningValue = 0;
         handTurnsCompleted = 0;
 
-        SetPhase(CardadoGamePhase.PlayingHands);
-        NotifyHandTurnStarted();
+        BeginCurrentPlayerTurn();
+    }
+
+    public bool TrySkipCardAction(int playerIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+        if (Phase != CardadoGamePhase.CardActionDecision || playerIndex != CurrentHandPlayerIndex)
+            return false;
+
+        if (PendingCardActionCard != null)
+            return false;
+
+        Debug.Log($"[Cardado] {players[playerIndex].playerId} skipped their card action.");
+        BeginDieSelectionForCurrentPlayer();
+        return true;
     }
 
     /// <summary>
-    /// Plays one die for the current player. Dice are indexed from zero and a value
-    /// of zero means that die has already been played. Card effects are deliberately
-    /// not resolved here yet; the future card-action step will modify the player's
-    /// available dice before this method is called.
+    /// First card-action implementation: blank cards resolve with no effect, and
+    /// Artist rerolls one available die. Other cards remain in hand until their
+    /// individual effect is implemented.
     /// </summary>
+    public bool TryPlayCard(int playerIndex, int cardIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+
+        if (Phase != CardadoGamePhase.CardActionDecision || playerIndex != CurrentHandPlayerIndex)
+            return false;
+
+        if (PendingCardActionCard != null)
+            return false;
+
+        CardadoPlayerState player = players[playerIndex];
+        if (cardIndex < 0 || cardIndex >= player.hand.cardsInHand.Count)
+            return false;
+
+        CardInstance card = player.hand.cardsInHand[cardIndex];
+        if (card == null || card.data == null)
+            return false;
+
+        if (!card.data.isBlankCard && card.data.cardType != CardType.Artist)
+        {
+            Debug.Log($"[Cardado] {player.playerId} selected {card.data.id}, but that card effect is not implemented yet.");
+            return false;
+        }
+
+        player.hand.RemoveCard(card);
+        card.isPlayed = true;
+        CardPlayed?.Invoke(player, card);
+
+        if (card.data.isBlankCard)
+        {
+            Debug.Log($"[Cardado] {player.playerId} played blank card {card.data.id}. It has no effect.");
+            DiscardResolvedCard(card);
+            BeginDieSelectionForCurrentPlayer();
+            return true;
+        }
+
+        PendingCardActionCard = card;
+        Debug.Log($"[Cardado] {player.playerId} played Artist {card.data.id}. Choose a die to reroll.");
+        SetPhase(CardadoGamePhase.CardActionDecision);
+        CardActionRequested?.Invoke(player, CardadoCardActionRequestType.ChooseArtistDie);
+        return true;
+    }
+
+    public bool TryResolveArtistDie(int playerIndex, int dieIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+
+        if (Phase != CardadoGamePhase.CardActionDecision || playerIndex != CurrentHandPlayerIndex)
+            return false;
+
+        CardInstance card = PendingCardActionCard;
+        if (card == null || card.data == null || card.data.cardType != CardType.Artist)
+            return false;
+
+        if (!IsDieAvailable(playerIndex, dieIndex))
+            return false;
+
+        CardadoPlayerState player = players[playerIndex];
+        int oldValue = player.dice[dieIndex];
+        int newValue = UnityEngine.Random.Range(1, 7);
+        player.dice[dieIndex] = newValue;
+
+        Debug.Log($"[Cardado] {player.playerId} rerolled die #{dieIndex + 1}: {oldValue} -> {newValue} using {card.data.id}.");
+        CardEffectResolved?.Invoke(player, card, dieIndex, newValue);
+
+        PendingCardActionCard = null;
+        DiscardResolvedCard(card);
+        BeginDieSelectionForCurrentPlayer();
+        return true;
+    }
+
+    public int GetAvailableDieCount(int playerIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+        int count = 0;
+        foreach (int die in players[playerIndex].dice)
+        {
+            if (die > 0)
+                count++;
+        }
+        return count;
+    }
+
+    public bool IsDieAvailable(int playerIndex, int dieIndex)
+    {
+        ValidatePlayerIndex(playerIndex);
+        return dieIndex >= 0 && dieIndex < players[playerIndex].dice.Count && players[playerIndex].dice[dieIndex] > 0;
+    }
+
+    public void SetNextHandStarter(int winnerPlayerIndex)
+    {
+        ValidatePlayerIndex(winnerPlayerIndex);
+        StartingPlayerIndex = winnerPlayerIndex;
+        CurrentHandStarterIndex = winnerPlayerIndex;
+    }
+
+    public void DiscardResolvedCard(CardInstance card)
+    {
+        if (RoundDeck == null)
+            throw new InvalidOperationException("The round deck has not been initialized.");
+
+        RoundDeck.Discard(card);
+    }
+
     public bool TryPlayDie(int playerIndex, int dieIndex)
     {
         ValidatePlayerIndex(playerIndex);
@@ -287,7 +406,7 @@ public class CardadoGameManager : MonoBehaviour
         if (handTurnsCompleted < players.Count)
         {
             CurrentHandPlayerIndex = GetNextPlayerIndex(playerIndex);
-            NotifyHandTurnStarted();
+            BeginCurrentPlayerTurn();
             return true;
         }
 
@@ -295,47 +414,6 @@ public class CardadoGameManager : MonoBehaviour
         return true;
     }
 
-    public int GetAvailableDieCount(int playerIndex)
-    {
-        ValidatePlayerIndex(playerIndex);
-
-        int count = 0;
-        foreach (int die in players[playerIndex].dice)
-        {
-            if (die > 0)
-                count++;
-        }
-
-        return count;
-    }
-
-    public bool IsDieAvailable(int playerIndex, int dieIndex)
-    {
-        ValidatePlayerIndex(playerIndex);
-        return dieIndex >= 0 && dieIndex < players[playerIndex].dice.Count && players[playerIndex].dice[dieIndex] > 0;
-    }
-
-    public void SetNextHandStarter(int winnerPlayerIndex)
-    {
-        ValidatePlayerIndex(winnerPlayerIndex);
-        StartingPlayerIndex = winnerPlayerIndex;
-        CurrentHandStarterIndex = winnerPlayerIndex;
-    }
-
-    public void DiscardResolvedCard(CardInstance card)
-    {
-        if (RoundDeck == null)
-            throw new InvalidOperationException("The round deck has not been initialized.");
-
-        RoundDeck.Discard(card);
-    }
-
-    /// <summary>
-    /// Settles the round call after all hands have been played.
-    /// A correct prediction earns the player's round chip bet; an incorrect
-    /// prediction costs that bet. This round economy is separate from War,
-    /// where chips are transferred directly between players.
-    /// </summary>
     public void ResolveRound()
     {
         if (Phase != CardadoGamePhase.RoundResolution)
@@ -356,11 +434,6 @@ public class CardadoGameManager : MonoBehaviour
         SetPhase(CardadoGamePhase.WarResolution);
     }
 
-    /// <summary>
-    /// Called by the War layer once every player has had their War opportunity.
-    /// Chips are the match points, so the winning target is evaluated only after
-    /// all optional Wars have finished and their chip transfers are settled.
-    /// </summary>
     public void CompleteWarPhase()
     {
         if (Phase != CardadoGamePhase.WarResolution)
@@ -438,6 +511,31 @@ public class CardadoGameManager : MonoBehaviour
         CurrentHandWinnerIndex = -1;
         CurrentHandWinningValue = 0;
         handTurnsCompleted = 0;
+        BeginCurrentPlayerTurn();
+    }
+
+    private void BeginCurrentPlayerTurn()
+    {
+        if (CurrentHandPlayerIndex < 0)
+            return;
+
+        PendingCardActionCard = null;
+        CardadoPlayerState player = players[CurrentHandPlayerIndex];
+
+        if (player.hand.cardsInHand.Count > 0)
+        {
+            SetPhase(CardadoGamePhase.CardActionDecision);
+            CardActionRequested?.Invoke(player, CardadoCardActionRequestType.ChooseCard);
+            return;
+        }
+
+        Debug.Log($"[Cardado] {player.playerId} has no cards in hand; proceeding directly to die selection.");
+        BeginDieSelectionForCurrentPlayer();
+    }
+
+    private void BeginDieSelectionForCurrentPlayer()
+    {
+        SetPhase(CardadoGamePhase.PlayingHands);
         NotifyHandTurnStarted();
     }
 
@@ -446,10 +544,7 @@ public class CardadoGameManager : MonoBehaviour
         if (CurrentHandPlayerIndex < 0)
             return;
 
-        HandTurnStarted?.Invoke(
-            players[CurrentHandPlayerIndex],
-            CurrentHandNumber,
-            CurrentHandStarterIndex);
+        HandTurnStarted?.Invoke(players[CurrentHandPlayerIndex], CurrentHandNumber, CurrentHandStarterIndex);
     }
 
     private void DealInitialHands()
@@ -485,7 +580,6 @@ public class CardadoGameManager : MonoBehaviour
         foreach (var player in players)
         {
             player.dice.Clear();
-
             for (int i = 0; i < RoundDiceCount; i++)
                 player.dice.Add(UnityEngine.Random.Range(1, 7));
 
@@ -508,7 +602,6 @@ public class CardadoGameManager : MonoBehaviour
     private void BuildPlayers()
     {
         players.Clear();
-
         foreach (string playerId in playerIds)
         {
             if (!string.IsNullOrWhiteSpace(playerId))
@@ -543,10 +636,8 @@ public class CardadoGameManager : MonoBehaviour
         }
 
         PendingDealerDecision = null;
-
         if (SetupRoll.diceCountDie != 6)
             RoundDiceCount = SetupRoll.diceCountDie;
-
         if (SetupRoll.cardCountDie != 6)
             RoundCardCount = SetupRoll.cardCountDie;
 
@@ -569,11 +660,9 @@ public class CardadoGameManager : MonoBehaviour
         {
             if (i == excludedPlayerIndex)
                 continue;
-
             if (players[i].hasPlacedBid)
                 total += players[i].diceBid;
         }
-
         return total;
     }
 
@@ -581,7 +670,6 @@ public class CardadoGameManager : MonoBehaviour
     {
         if (players.Count == 0)
             return -1;
-
         return (playerIndex + 1) % players.Count;
     }
 
