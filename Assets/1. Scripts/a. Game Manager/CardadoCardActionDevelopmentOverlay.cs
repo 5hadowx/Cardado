@@ -20,7 +20,7 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     {
         gameManager = GetComponent<CardadoGameManager>();
         if (gameManager == null)
-            gameManager = FindObjectOfType<CardadoGameManager>();
+            gameManager = FindFirstObjectByType<CardadoGameManager>();
     }
 
     private void OnEnable()
