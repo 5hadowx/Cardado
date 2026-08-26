@@ -48,6 +48,7 @@ public class CardadoGameManager : MonoBehaviour
     public RoundSetupRoll SetupRoll { get; private set; }
     public RoundSetupDecisionType? PendingDealerDecision { get; private set; }
     public Deck RoundDeck { get; private set; }
+    public int MatchWinnerIndex { get; private set; } = -1;
 
     public event Action<CardadoGamePhase> PhaseChanged;
     public event Action<RoundSetupRoll> SetupDiceRolled;
@@ -62,6 +63,7 @@ public class CardadoGameManager : MonoBehaviour
     public event Action<int, int> HandCompleted;
     public event Action RoundPlayingCompleted;
     public event Action RoundResolutionCompleted;
+    public event Action<int> MatchWon;
 
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
@@ -352,6 +354,65 @@ public class CardadoGameManager : MonoBehaviour
 
         RoundResolutionCompleted?.Invoke();
         SetPhase(CardadoGamePhase.WarResolution);
+    }
+
+    /// <summary>
+    /// Called by the War layer once every player has had their War opportunity.
+    /// Chips are the match points, so the winning target is evaluated only after
+    /// all optional Wars have finished and their chip transfers are settled.
+    /// </summary>
+    public void CompleteWarPhase()
+    {
+        if (Phase != CardadoGamePhase.WarResolution)
+            return;
+
+        List<int> winnersAtTarget = new List<int>();
+        int highestChipsAmongTargets = int.MinValue;
+
+        foreach (var player in players)
+        {
+            if (player.chips >= matchConfig.winningPoints)
+                highestChipsAmongTargets = Math.Max(highestChipsAmongTargets, player.chips);
+        }
+
+        if (highestChipsAmongTargets != int.MinValue)
+        {
+            foreach (var player in players)
+            {
+                if (player.chips >= matchConfig.winningPoints && player.chips == highestChipsAmongTargets)
+                    winnersAtTarget.Add(players.IndexOf(player));
+            }
+        }
+
+        if (winnersAtTarget.Count == 1)
+        {
+            MatchWinnerIndex = winnersAtTarget[0];
+            CardadoPlayerState winner = players[MatchWinnerIndex];
+            Debug.Log($"[Cardado] MATCH WON: {winner.playerId} reached {winner.chips} chips " +
+                      $"(winning target {matchConfig.winningPoints}).");
+            MatchWon?.Invoke(MatchWinnerIndex);
+            SetPhase(CardadoGamePhase.GameOver);
+            return;
+        }
+
+        if (winnersAtTarget.Count > 1)
+        {
+            MatchWinnerIndex = -1;
+            Debug.LogWarning($"[Cardado] MATCH TIE: {winnersAtTarget.Count} players reached the winning target " +
+                             $"with the same chip total ({highestChipsAmongTargets}). Endgame tie resolution is not implemented yet.");
+            SetPhase(CardadoGamePhase.GameOver);
+            return;
+        }
+
+        MatchWinnerIndex = -1;
+        StartNextRound();
+    }
+
+    private void StartNextRound()
+    {
+        int nextDealer = GetNextPlayerIndex(DealerPlayerIndex);
+        Debug.Log($"[Cardado] No player has reached the winning target. Next round dealer: {players[nextDealer].playerId}.");
+        SetDealer(nextDealer);
     }
 
     private void CompleteCurrentHand()
