@@ -97,7 +97,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
     private void OnPlayerHandDealt(CardadoPlayerState player)
     {
-        Debug.Log($"[Cardado] {player.playerId} dealt their initial hand.");
+        // Detailed hand contents are logged by CardadoDevelopmentCardLogger.
     }
 
     private void OnPlayerDiceRolled(CardadoPlayerState player)
