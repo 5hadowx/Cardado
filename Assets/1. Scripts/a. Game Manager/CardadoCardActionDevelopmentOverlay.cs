@@ -13,6 +13,7 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     private int playerIndex = -1;
 
     private GUIStyle panelStyle;
+    private GUIStyle modalBackgroundStyle;
     private GUIStyle titleStyle;
     private GUIStyle buttonStyle;
 
@@ -80,10 +81,28 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
     private void DrawCardChoicePanel()
     {
+        if (playerIndex >= gameManager.Players.Count)
+        {
+            visible = false;
+            playerIndex = -1;
+            return;
+        }
+
         CardadoPlayerState player = gameManager.Players[playerIndex];
+        if (player == null || player.hand == null || player.hand.cardsInHand == null)
+        {
+            visible = false;
+            playerIndex = -1;
+            return;
+        }
+
         const float width = 820f;
         const float height = 390f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
+
+        // This is a modal development overlay. Cover the previous die-selection
+        // tester so the old panel cannot remain visible behind the new card UI.
+        DrawModalBackground();
 
         GUI.Box(panel, GUIContent.none, panelStyle);
         GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
@@ -94,14 +113,19 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         float buttonWidth = 145f;
         float buttonHeight = 90f;
         float spacing = 12f;
-        int count = player.hand.cardsInHand.Count;
+
+        // Snapshot the hand before drawing buttons. Playing a card can remove it
+        // from cardsInHand immediately, so iterating the live list can otherwise
+        // produce an ArgumentOutOfRangeException during this same OnGUI pass.
+        CardInstance[] cards = player.hand.cardsInHand.ToArray();
+        int count = cards.Length;
         float totalWidth = count * buttonWidth + Mathf.Max(0, count - 1) * spacing;
         float startX = panel.x + (width - totalWidth) * 0.5f;
         float y = panel.y + 120f;
 
         for (int i = 0; i < count; i++)
         {
-            CardInstance card = player.hand.cardsInHand[i];
+            CardInstance card = cards[i];
             if (card == null || card.data == null)
                 continue;
 
@@ -110,21 +134,37 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             Rect buttonRect = new Rect(startX + i * (buttonWidth + spacing), y, buttonWidth, buttonHeight);
 
             if (GUI.Button(buttonRect, label, buttonStyle))
+            {
                 TryPlayCard(i);
+                // GameManager may synchronously request the next player's card
+                // action. Stop this GUI pass so the new state is drawn cleanly.
+                return;
+            }
         }
 
         Rect skipRect = new Rect(panel.x + 25f, panel.y + 290f, width - 50f, 55f);
         if (GUI.Button(skipRect, "SKIP CARD ACTION", buttonStyle))
+        {
             TrySkipCardAction();
+            return;
+        }
     }
 
     private void DrawArtistDiePanel()
     {
+        if (playerIndex >= gameManager.Players.Count)
+        {
+            visible = false;
+            playerIndex = -1;
+            return;
+        }
+
         CardadoPlayerState player = gameManager.Players[playerIndex];
         const float width = 760f;
         const float height = 300f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
 
+        DrawModalBackground();
         GUI.Box(panel, GUIContent.none, panelStyle);
         GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
             $"{player.playerId} — ARTIST", titleStyle);
@@ -143,8 +183,19 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
             Rect buttonRect = new Rect(startX + dieIndex * (buttonWidth + spacing), panel.y + 125f, buttonWidth, 70f);
             if (GUI.Button(buttonRect, $"Die {dieIndex + 1}\n{player.dice[dieIndex]}", buttonStyle))
+            {
                 TryResolveArtistDie(dieIndex);
+                return;
+            }
         }
+    }
+
+    private void DrawModalBackground()
+    {
+        Color previousColor = GUI.color;
+        GUI.color = new Color(0.035f, 0.06f, 0.10f, 1f);
+        GUI.Box(new Rect(0f, 0f, Screen.width, Screen.height), GUIContent.none, modalBackgroundStyle);
+        GUI.color = previousColor;
     }
 
     private void TryPlayCard(int cardIndex)
@@ -204,6 +255,11 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
         panelStyle = new GUIStyle(GUI.skin.box);
         panelStyle.padding = new RectOffset(20, 20, 20, 20);
+
+        modalBackgroundStyle = new GUIStyle(GUI.skin.box)
+        {
+            normal = { background = Texture2D.whiteTexture }
+        };
 
         titleStyle = new GUIStyle(GUI.skin.label)
         {
