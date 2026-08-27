@@ -10,6 +10,7 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     private Step step;
     private bool visible;
     private int playerIndex = -1, targetIndex = -1, ownDieIndex = -1, modifierDirection;
+    private int trackedHandNumber = -1;
     private CardInstance activeCard;
     private readonly HashSet<string> bodyguards = new HashSet<string>();
     private readonly Dictionary<string, int> modifierOriginal = new Dictionary<string, int>();
@@ -57,7 +58,12 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
     private void OnHandTurnStarted(CardadoPlayerState player, int hand, int starter)
     {
-        visible = false; step = Step.None; cardBlockedThisHand.Clear();
+        if (hand != trackedHandNumber)
+        {
+            trackedHandNumber = hand;
+            cardBlockedThisHand.Clear();
+        }
+        visible = false; step = Step.None;
         playerIndex = -1; targetIndex = -1; ownDieIndex = -1; activeCard = null;
     }
 
