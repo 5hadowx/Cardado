@@ -10,20 +10,9 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 {
     private enum Step
     {
-        None,
-        Cards,
-        ArtistDie,
-        DieAfterSkip,
-        SoldierTarget,
-        SoldierDie,
-        CollectorTarget,
-        CollectorCard,
-        BodyguardDie,
-        MirrorTarget,
-        MirrorOwnDie,
-        MirrorTargetDie,
-        ModifierDirection,
-        ModifierTarget,
+        None, Cards, ArtistDie, DieAfterSkip, SoldierTarget, SoldierDie,
+        CollectorTarget, CollectorCard, BodyguardDie, MirrorTarget,
+        MirrorOwnDie, MirrorTargetDie, ModifierDirection, ModifierTarget,
         ExecutionerTarget
     }
 
@@ -149,18 +138,13 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         {
             CardInstance c = cards[i];
             if (c == null || c.data == null) continue;
-
             if (GUI.Button(new Rect(x + i * (bw + gap), r.y + 120, bw, 90),
                 c.data.id + "\n" + c.data.cardType + (c.data.isBlankCard ? "\nBlank" : ""), button))
-            {
                 SelectCard(c);
-            }
         }
 
         if (GUI.Button(new Rect(r.x + 25, r.y + 320, 850, 55), "SKIP CARD ACTION", button))
-        {
             SkipCardAction();
-        }
     }
 
     private void DrawDice(string heading, string text, int p, bool allowBack)
@@ -175,15 +159,11 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         {
             if (!gameManager.IsDieAvailable(p, d)) continue;
             if (GUI.Button(new Rect(r.x + 25 + d * 105, r.y + 135, 90, 70), $"Die {d + 1}\n{state.dice[d]}", button))
-            {
                 DieChosen(d);
-            }
         }
 
         if (allowBack && GUI.Button(new Rect(r.x + 25, r.y + 285, 710, 55), "BACK", button))
-        {
             BackFromDieSelection();
-        }
     }
 
     private void DrawTargets(string heading, string text, bool self)
@@ -199,16 +179,12 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             if (!self && i == playerIndex) continue;
             CardadoPlayerState p = gameManager.Players[i];
             if (GUI.Button(new Rect(x, r.y + 125, 145, 75), $"{p.playerId}\nChips: {p.chips}", button))
-            {
                 TargetChosen(i);
-            }
             x += 160;
         }
 
         if (GUI.Button(new Rect(r.x + 25, r.y + 245, 750, 55), "BACK", button))
-        {
             BackFromTargetSelection();
-        }
     }
 
     private void DrawCollectorCards()
@@ -225,13 +201,8 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         {
             if (GUI.Button(new Rect(x, y, 145, 70), $"CARD {i + 1}", button))
                 CollectorCard(cards[i]);
-
             x += 160;
-            if (x > r.x + 650)
-            {
-                x = r.x + 25;
-                y += 85;
-            }
+            if (x > r.x + 650) { x = r.x + 25; y += 85; }
         }
 
         if (GUI.Button(new Rect(r.x + 25, r.y + 345, 770, 55), "BACK", button))
@@ -250,20 +221,19 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             modifierDirection = 1;
             step = Step.ModifierTarget;
         }
-
         if (GUI.Button(new Rect(r.x + 370, r.y + 125, 280, 70), "-1", button))
         {
             modifierDirection = -1;
             step = Step.ModifierTarget;
         }
-
         if (GUI.Button(new Rect(r.x + 50, r.y + 225, 600, 55), "BACK", button))
             BackToCards();
     }
 
     private void DrawModifierTarget()
     {
-        Rect r = Box(900, 590);
+        // Five player rows plus a visible Back button fit inside the development window.
+        Rect r = Box(900, 520);
         GUI.Box(r, GUIContent.none, panel);
         GUI.Label(new Rect(r.x + 25, r.y + 20, 850, 45), $"MODIFIER {modifierDirection:+#;-#} — CHOOSE DIE", title);
         GUI.Label(new Rect(r.x + 25, r.y + 65, 850, 30), "Selecting the die applies the modifier and commits the card.", GUI.skin.label);
@@ -278,14 +248,21 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             for (int d = 0; d < state.dice.Count; d++)
             {
                 if (!gameManager.IsDieAvailable(p, d)) continue;
+
+                bool valid = (modifierDirection == 1 && state.dice[d] < 6) ||
+                             (modifierDirection == -1 && state.dice[d] > 1);
+
+                GUI.enabled = valid;
                 if (GUI.Button(new Rect(x, y - 5, 90, 60), $"Die {d + 1}\n{state.dice[d]}", button))
                     ModifierChosen(p, d);
+                GUI.enabled = true;
+
                 x += 105;
             }
             y += 80;
         }
 
-        if (GUI.Button(new Rect(r.x + 25, r.y + 525, 850, 50), "BACK", button))
+        if (GUI.Button(new Rect(r.x + 25, r.y + 455, 850, 50), "BACK", button))
             step = Step.ModifierDirection;
     }
 
@@ -327,24 +304,12 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
         switch (card.data.cardType)
         {
-            case CardType.Knight:
-                step = Step.SoldierTarget;
-                break;
-            case CardType.Collector:
-                step = Step.CollectorTarget;
-                break;
-            case CardType.Bodyguard:
-                step = Step.BodyguardDie;
-                break;
-            case CardType.Mirror:
-                step = Step.MirrorTarget;
-                break;
-            case CardType.Executioner:
-                step = Step.ExecutionerTarget;
-                break;
-            default:
-                CommitSimpleCard();
-                return;
+            case CardType.Knight: step = Step.SoldierTarget; break;
+            case CardType.Collector: step = Step.CollectorTarget; break;
+            case CardType.Bodyguard: step = Step.BodyguardDie; break;
+            case CardType.Mirror: step = Step.MirrorTarget; break;
+            case CardType.Executioner: step = Step.ExecutionerTarget; break;
+            default: CommitSimpleCard(); return;
         }
 
         Debug.Log($"[Cardado] {gameManager.Players[playerIndex].playerId} selected {card.data.id}; selection remains reversible until the effect is committed.");
@@ -377,21 +342,18 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             BackToCards();
             return;
         }
-
         if (step == Step.SoldierDie)
         {
             targetIndex = -1;
             step = Step.SoldierTarget;
             return;
         }
-
         if (step == Step.CollectorCard)
         {
             targetIndex = -1;
             step = Step.CollectorTarget;
             return;
         }
-
         if (step == Step.MirrorOwnDie)
         {
             ownDieIndex = -1;
@@ -402,38 +364,23 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
     private void BackFromDieSelection()
     {
-        if (step == Step.DieAfterSkip)
+        if (step == Step.DieAfterSkip || step == Step.ArtistDie || step == Step.BodyguardDie)
         {
             BackToCards();
             return;
         }
-
-        if (step == Step.ArtistDie)
-        {
-            BackToCards();
-            return;
-        }
-
         if (step == Step.SoldierDie)
         {
             targetIndex = -1;
             step = Step.SoldierTarget;
             return;
         }
-
-        if (step == Step.BodyguardDie)
-        {
-            BackToCards();
-            return;
-        }
-
         if (step == Step.MirrorOwnDie)
         {
             targetIndex = -1;
             step = Step.MirrorTarget;
             return;
         }
-
         if (step == Step.MirrorTargetDie)
         {
             ownDieIndex = -1;
@@ -444,15 +391,10 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     private void TargetChosen(int target)
     {
         targetIndex = target;
-
-        if (step == Step.SoldierTarget)
-            step = Step.SoldierDie;
-        else if (step == Step.CollectorTarget)
-            step = Step.CollectorCard;
-        else if (step == Step.MirrorTarget)
-            step = Step.MirrorOwnDie;
-        else if (step == Step.ExecutionerTarget)
-            Executioner(target);
+        if (step == Step.SoldierTarget) step = Step.SoldierDie;
+        else if (step == Step.CollectorTarget) step = Step.CollectorCard;
+        else if (step == Step.MirrorTarget) step = Step.MirrorOwnDie;
+        else if (step == Step.ExecutionerTarget) Executioner(target);
     }
 
     private void DieChosen(int die)
@@ -463,21 +405,14 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             gameManager.TryPlayDie(playerIndex, die);
             return;
         }
-
         if (step == Step.ArtistDie)
         {
             CommitArtistDie(die);
             return;
         }
-
         if (step == Step.SoldierDie)
         {
-            if (IsProtected(targetIndex, die))
-            {
-                Debug.LogWarning("[Cardado] Soldier target is protected.");
-                return;
-            }
-
+            if (IsProtected(targetIndex, die)) { Debug.LogWarning("[Cardado] Soldier target is protected."); return; }
             CardadoPlayerState target = gameManager.Players[targetIndex];
             int old = target.dice[die];
             target.dice[die] = UnityEngine.Random.Range(1, 7);
@@ -485,7 +420,6 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             CommitActiveCardAndContinue();
             return;
         }
-
         if (step == Step.BodyguardDie)
         {
             bodyguards.Add(Key(playerIndex, die));
@@ -493,22 +427,15 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             CommitActiveCardAndContinue();
             return;
         }
-
         if (step == Step.MirrorOwnDie)
         {
             ownDieIndex = die;
             step = Step.MirrorTargetDie;
             return;
         }
-
         if (step == Step.MirrorTargetDie)
         {
-            if (IsProtected(targetIndex, die))
-            {
-                Debug.LogWarning("[Cardado] Mirror target is protected.");
-                return;
-            }
-
+            if (IsProtected(targetIndex, die)) { Debug.LogWarning("[Cardado] Mirror target is protected."); return; }
             CardadoPlayerState a = gameManager.Players[playerIndex];
             CardadoPlayerState b = gameManager.Players[targetIndex];
             int v = a.dice[ownDieIndex];
@@ -531,7 +458,6 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         collector.isPlayed = true;
         gameManager.Players[playerIndex].hand.RemoveCard(collector);
         gameManager.DiscardResolvedCard(collector);
-
         activeCard = stolen;
 
         if (stolen.data.isBlankCard)
@@ -541,14 +467,12 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             FinishCommittedCard();
             return;
         }
-
         if (stolen.data.isModifier)
         {
             step = Step.ModifierDirection;
             Debug.Log($"[Cardado] Collector committed; stolen modifier {stolen.data.id} now awaits its own direction choice.");
             return;
         }
-
         if (stolen.data.rarity != CardRarity.Normal)
         {
             Debug.Log($"[Cardado] Stolen {stolen.data.id} is {stolen.data.rarity}; special/royalty effects are next pass.");
@@ -558,29 +482,30 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
         switch (stolen.data.cardType)
         {
-            case CardType.Artist:
-                step = Step.ArtistDie;
-                break;
-            case CardType.Knight:
-                step = Step.SoldierTarget;
-                break;
-            case CardType.Bodyguard:
-                step = Step.BodyguardDie;
-                break;
-            case CardType.Mirror:
-                step = Step.MirrorTarget;
-                break;
-            case CardType.Executioner:
-                step = Step.ExecutionerTarget;
-                break;
-            default:
-                FinishCommittedCard();
-                break;
+            case CardType.Artist: step = Step.ArtistDie; break;
+            case CardType.Knight: step = Step.SoldierTarget; break;
+            case CardType.Bodyguard: step = Step.BodyguardDie; break;
+            case CardType.Mirror: step = Step.MirrorTarget; break;
+            case CardType.Executioner: step = Step.ExecutionerTarget; break;
+            default: FinishCommittedCard(); break;
         }
     }
 
     private void ModifierChosen(int p, int d)
     {
+        if (!gameManager.IsDieAvailable(p, d)) return;
+
+        int currentValue = gameManager.Players[p].dice[d];
+        if (modifierDirection == 1 && currentValue >= 6)
+        {
+            Debug.LogWarning($"[Cardado] Cannot apply +1 to {gameManager.Players[p].playerId} die #{d + 1}: die is already 6.");
+            return;
+        }
+        if (modifierDirection == -1 && currentValue <= 1)
+        {
+            Debug.LogWarning($"[Cardado] Cannot apply -1 to {gameManager.Players[p].playerId} die #{d + 1}: die is already 1.");
+            return;
+        }
         if (IsProtected(p, d) && p != playerIndex)
         {
             Debug.LogWarning("[Cardado] Modifier target is protected.");
@@ -594,8 +519,8 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             return;
         }
 
-        modifierOriginal[key] = gameManager.Players[p].dice[d];
-        gameManager.Players[p].dice[d] += modifierDirection;
+        modifierOriginal[key] = currentValue;
+        gameManager.Players[p].dice[d] = currentValue + modifierDirection;
         Debug.Log($"[Cardado] Modifier {modifierDirection:+#;-#} applied to {gameManager.Players[p].playerId} die #{d + 1}: {gameManager.Players[p].dice[d]}.");
         CommitActiveCardAndContinue();
     }
@@ -616,7 +541,6 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
                 cancelled = true;
                 Debug.Log($"[Cardado] Executioner cancelled modifier on {p.playerId} die #{d + 1}.");
             }
-
             if (bodyguards.Remove(key))
             {
                 cancelled = true;
@@ -629,15 +553,12 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             cardBlockedThisHand.Add(target);
             Debug.Log($"[Cardado] Executioner blocked {p.playerId} from playing a card for the rest of this hand.");
         }
-
         CommitActiveCardAndContinue();
     }
 
     private void CommitArtistDie(int die)
     {
-        if (activeCard == null) return;
-        if (!gameManager.IsDieAvailable(playerIndex, die)) return;
-
+        if (activeCard == null || !gameManager.IsDieAvailable(playerIndex, die)) return;
         CardadoPlayerState player = gameManager.Players[playerIndex];
         int old = player.dice[die];
         player.dice[die] = UnityEngine.Random.Range(1, 7);
@@ -658,7 +579,6 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     private void CommitActiveCardAndContinue()
     {
         if (activeCard == null) return;
-
         activeCard.isPlayed = true;
         gameManager.Players[playerIndex].hand.RemoveCard(activeCard);
         gameManager.DiscardResolvedCard(activeCard);
@@ -674,13 +594,12 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         targetIndex = -1;
         ownDieIndex = -1;
         modifierDirection = 0;
-
-        // The card effect is now committed. Move into normal die play.
         gameManager.TrySkipCardAction(playerIndex);
     }
 
     private bool IsProtected(int p, int d) => bodyguards.Contains(Key(p, d));
     private string Key(int p, int d) => p + ":" + d;
+
     private int IndexOf(CardadoPlayerState p)
     {
         for (int i = 0; i < gameManager.Players.Count; i++)
