@@ -143,9 +143,23 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     private void PlayCard(CardInstance card)
     {
         if(card==null||card.data==null)return;
-        if(card.data.isBlankCard||card.data.cardType==CardType.Artist)
+        if(card.data.isBlankCard)
         {
             int i=gameManager.Players[playerIndex].hand.cardsInHand.IndexOf(card); if(i>=0) gameManager.TryPlayCard(playerIndex,i); return;
+        }
+        if(card.data.isModifier)
+        {
+            gameManager.Players[playerIndex].hand.RemoveCard(card); card.isPlayed=true; activeCard=card; step=Step.ModifierDirection;
+            Debug.Log($"[Cardado] {gameManager.Players[playerIndex].playerId} played modifier {card.data.id}. Choose +1 or -1."); return;
+        }
+        if(card.data.rarity==CardRarity.Normal && card.data.cardType==CardType.Artist)
+        {
+            int i=gameManager.Players[playerIndex].hand.cardsInHand.IndexOf(card); if(i>=0) gameManager.TryPlayCard(playerIndex,i); return;
+        }
+        if(card.data.rarity!=CardRarity.Normal)
+        {
+            Debug.Log($"[Cardado] {card.data.id} is {card.data.rarity}; special/royalty effects are the next implementation pass.");
+            return;
         }
         gameManager.Players[playerIndex].hand.RemoveCard(card); card.isPlayed=true; activeCard=card;
         switch(card.data.cardType)
@@ -155,7 +169,7 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             case CardType.Bodyguard: step=Step.BodyguardDie; break;
             case CardType.Mirror: step=Step.MirrorTarget; break;
             case CardType.Executioner: step=Step.ExecutionerTarget; break;
-            default: Debug.Log($"[Cardado] {card.data.id} is a special/royalty card; that effect is next in the implementation pass."); Finish(true); break;
+            default: Finish(true); break;
         }
         Debug.Log($"[Cardado] {gameManager.Players[playerIndex].playerId} played {card.data.id}.");
     }
@@ -186,7 +200,9 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     {
         if(stolen==null)return; CardadoPlayerState target=gameManager.Players[targetIndex];target.hand.RemoveCard(stolen);stolen.isPlayed=true; if(activeCard!=null)gameManager.DiscardResolvedCard(activeCard); activeCard=stolen;
         if(stolen.data.isBlankCard){Debug.Log($"[Cardado] Collector immediately played blank {stolen.data.id}.");Finish(true);return;}
-        switch(stolen.data.cardType){case CardType.Artist:step=Step.ArtistDie;break;case CardType.Knight:step=Step.SoldierTarget;break;case CardType.Bodyguard:step=Step.BodyguardDie;break;case CardType.Mirror:step=Step.MirrorTarget;break;case CardType.Executioner:step=Step.ExecutionerTarget;break;default:Debug.Log($"[Cardado] Stolen {stolen.data.id} is special/royalty; effect next pass.");Finish(true);break;}
+        if(stolen.data.isModifier){step=Step.ModifierDirection;return;}
+        if(stolen.data.rarity!=CardRarity.Normal){Debug.Log($"[Cardado] Stolen {stolen.data.id} is {stolen.data.rarity}; special/royalty effects are next pass.");Finish(true);return;}
+        switch(stolen.data.cardType){case CardType.Artist:step=Step.ArtistDie;break;case CardType.Knight:step=Step.SoldierTarget;break;case CardType.Bodyguard:step=Step.BodyguardDie;break;case CardType.Mirror:step=Step.MirrorTarget;break;case CardType.Executioner:step=Step.ExecutionerTarget;break;default:Finish(true);break;}
     }
 
     private void ModifierChosen(int p,int d)
