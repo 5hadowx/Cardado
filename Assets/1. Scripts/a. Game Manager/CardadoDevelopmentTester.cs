@@ -13,6 +13,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
     private bool showDealerChoice;
     private bool showBettingChoice;
     private bool showDieChoice;
+    private bool cardActionOwnsUi;
     private int bettingPlayerIndex = -1;
     private int handPlayerIndex = -1;
     private int selectedChipBet = 1;
@@ -46,6 +47,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.BettingTurnStarted += OnBettingTurnStarted;
         gameManager.BettingCompleted += OnBettingCompleted;
         gameManager.HandTurnStarted += OnHandTurnStarted;
+        gameManager.CardActionRequested += OnCardActionRequested;
         gameManager.DiePlayed += OnDiePlayed;
         gameManager.HandCompleted += OnHandCompleted;
         gameManager.RoundPlayingCompleted += OnRoundPlayingCompleted;
@@ -138,7 +140,14 @@ public class CardadoDevelopmentTester : MonoBehaviour
     {
         handPlayerIndex = GetPlayerIndex(player);
         showDieChoice = true;
+        cardActionOwnsUi = false;
         Debug.Log($"[Cardado] HAND {handNumber}: {player.playerId} chooses a die. Hand starter: Player {handStarterIndex + 1}.");
+    }
+
+    private void OnCardActionRequested(CardadoPlayerState player, CardadoCardActionRequestType request)
+    {
+        cardActionOwnsUi = true;
+        showDieChoice = false;
     }
 
     private void OnDiePlayed(CardadoPlayerState player, int dieIndex, int dieValue)
@@ -149,6 +158,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
     private void OnHandCompleted(int winnerPlayerIndex, int winningValue)
     {
         showDieChoice = false;
+        cardActionOwnsUi = false;
         handPlayerIndex = -1;
         CardadoPlayerState winner = gameManager.Players[winnerPlayerIndex];
         Debug.Log($"[Cardado] HAND {gameManager.CurrentHandNumber} winner: {winner.playerId} with {winningValue}. Hands won: {winner.handsWon}.");
@@ -157,6 +167,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
     private void OnRoundPlayingCompleted()
     {
         showDieChoice = false;
+        cardActionOwnsUi = false;
         handPlayerIndex = -1;
         Debug.Log("[Cardado] All dice have been played. Round is ready for resolution.");
 
@@ -189,7 +200,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
             return;
         }
 
-        if (showDieChoice && gameManager != null && handPlayerIndex >= 0)
+        if (showDieChoice && !cardActionOwnsUi && gameManager != null && handPlayerIndex >= 0)
             DrawDieChoicePanel();
     }
 
@@ -329,7 +340,10 @@ public class CardadoDevelopmentTester : MonoBehaviour
 
             Rect buttonRect = new Rect(startX + dieIndex * (buttonWidth + spacing), panel.y + 125f, buttonWidth, 70f);
             if (GUI.Button(buttonRect, $"Die {dieIndex + 1}\n{player.dice[dieIndex]}", buttonStyle))
+            {
                 ResolveDieChoice(dieIndex);
+                return;
+            }
         }
 
         GUI.Label(new Rect(panel.x + 25f, panel.y + 215f, width - 50f, 30f),
@@ -416,6 +430,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.BettingTurnStarted -= OnBettingTurnStarted;
         gameManager.BettingCompleted -= OnBettingCompleted;
         gameManager.HandTurnStarted -= OnHandTurnStarted;
+        gameManager.CardActionRequested -= OnCardActionRequested;
         gameManager.DiePlayed -= OnDiePlayed;
         gameManager.HandCompleted -= OnHandCompleted;
         gameManager.RoundPlayingCompleted -= OnRoundPlayingCompleted;
