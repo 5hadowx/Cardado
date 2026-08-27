@@ -401,8 +401,12 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     {
         if (step == Step.DieAfterSkip)
         {
-            if (!gameManager.TrySkipCardAction(playerIndex)) return;
-            gameManager.TryPlayDie(playerIndex, die);
+            // TrySkipCardAction raises HandTurnStarted synchronously. That event
+            // resets this overlay's playerIndex, so preserve the selected player
+            // before advancing the manager to PlayingHands.
+            int skippedPlayerIndex = playerIndex;
+            if (!gameManager.TrySkipCardAction(skippedPlayerIndex)) return;
+            gameManager.TryPlayDie(skippedPlayerIndex, die);
             return;
         }
         if (step == Step.ArtistDie)
