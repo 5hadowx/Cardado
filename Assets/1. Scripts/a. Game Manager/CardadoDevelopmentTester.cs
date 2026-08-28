@@ -201,9 +201,6 @@ public class CardadoDevelopmentTester : MonoBehaviour
     {
         EnsureStyles();
         CardadoPlayerState player = gameManager.Players[predictionPlayerIndex];
-
-        // Keep the prediction panel compact enough for the development window while
-        // restoring the player's rolled dice as decision-making information.
         const float width = 800f;
         const float height = 350f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
@@ -243,8 +240,6 @@ public class CardadoDevelopmentTester : MonoBehaviour
         Rect confirmRect = new Rect(panel.x + 25f, panel.y + 285f, width - 50f, 50f);
         if (selectedDicePrediction >= 0 && GUI.Button(confirmRect, "CONFIRM PREDICTION", selectedButtonStyle))
             ResolvePrediction();
-        else if (selectedDicePrediction < 0)
-            GUI.Label(confirmRect, "Select your predicted number of hands won.", GUI.skin.label);
     }
 
     private void DrawPredictionDiceSummary(CardadoPlayerState player, Rect panel)
