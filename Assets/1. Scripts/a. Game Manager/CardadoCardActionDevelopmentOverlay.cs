@@ -2,18 +2,18 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-/// <summary>Temporary development UI for the complete card-action pipeline.</summary>
+/// <summary>Temporary development UI for the complete Cardado card-action pipeline.</summary>
 public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 {
     private enum Step
     {
         None, Cards, DieAfterSkip, ArtistDie, SoldierTarget, SoldierDie, CollectorTarget, CollectorCard,
         BodyguardDie, MirrorTarget, MirrorOwnDie, MirrorTargetDie, ModifierDirection, ModifierTarget,
-        ExecutionerTarget, SpecialArtistDie, SpecialSoldierChoice, SpecialSoldierTarget, SpecialSoldierDie,
-        SpecialSoldierAllDie, SpecialCollectorChoice, SpecialCollectorTake, SpecialCollectorPlay,
-        SpecialBodyguardChoice, SpecialMirrorChoice, SpecialMirrorTarget, SpecialMirrorOwnDie,
-        SpecialMirrorTargetDie, SpecialMirrorFirstOpponent, SpecialMirrorFirstDie, SpecialMirrorSecondOpponent,
-        SpecialMirrorSecondDie, SpecialExecutionerTarget, JokerTarget, JokerDie, GordonChoice
+        ExecutionerTarget, SpecialArtistChoice, SpecialArtistDie, SpecialSoldierChoice, SpecialSoldierTarget,
+        SpecialSoldierDie, SpecialSoldierAllDie, SpecialCollectorChoice, SpecialCollectorTake, SpecialCollectorPlay,
+        SpecialBodyguardChoice, SpecialMirrorChoice, SpecialMirrorTarget, SpecialMirrorOwnDie, SpecialMirrorTargetDie,
+        SpecialMirrorFirstOpponent, SpecialMirrorFirstDie, SpecialMirrorSecondOpponent, SpecialMirrorSecondDie,
+        SpecialExecutionerTarget, JokerTarget, JokerDie, GordonChoice
     }
 
     private CardadoGameManager gameManager;
@@ -114,7 +114,8 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
             case Step.ModifierDirection: DrawModifierDirection(); break;
             case Step.ModifierTarget: DrawModifierTarget(); break;
             case Step.ExecutionerTarget: DrawTargets("EXECUTIONER", "Choose an opponent to cancel.", false, Step.Cards); break;
-            case Step.SpecialArtistDie: DrawDice("SPECIAL ARTIST", "This die will be rerolled three times.", playerIndex, true); break;
+            case Step.SpecialArtistChoice: DrawChoice("SPECIAL ARTIST", new[] { "REROLL ONE DIE 3 TIMES", "REROLL ALL YOUR DICE ONCE" }, ChooseSpecialArtist, Step.Cards); break;
+            case Step.SpecialArtistDie: DrawDice("SPECIAL ARTIST", "Choose one of your dice. It will be rerolled three times.", playerIndex, true); break;
             case Step.SpecialSoldierChoice: DrawChoice("SPECIAL SOLDIER", new[] { "ONE OPPONENT REROLLS ALL DICE", "ALL OPPONENTS REROLL ONE DIE" }, ChooseSpecialSoldier, Step.Cards); break;
             case Step.SpecialSoldierTarget: DrawTargets("SPECIAL SOLDIER", "Choose the opponent.", false, Step.SpecialSoldierChoice); break;
             case Step.SpecialSoldierDie: DrawDice("SPECIAL SOLDIER", $"Choose a die from {gameManager.Players[targetIndex].playerId}.", targetIndex, true); break;
@@ -163,7 +164,8 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         for (int d = 0; d < state.dice.Count; d++)
         {
             if (!gameManager.IsDieAvailable(p, d)) continue;
-            GUI.enabled = CanAffect(p, d) || step == Step.ArtistDie || step == Step.SpecialArtistDie || step == Step.JokerDie || p == playerIndex;
+            bool enabled = CanAffect(p, d) || p == playerIndex;
+            GUI.enabled = enabled;
             if (GUI.Button(new Rect(r.x + 25 + d * 105, r.y + 135, 90, 70), $"Die {d + 1}\n{state.dice[d]}", button)) DieChosen(d);
             GUI.enabled = true;
         }
@@ -252,7 +254,13 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         for (int d = 0; d < gameManager.RoundDiceCount; d++)
         {
             bool available = false; for (int p = 0; p < gameManager.Players.Count; p++) if (p != playerIndex && gameManager.IsDieAvailable(p, d)) available = true;
-            GUI.enabled = available; if (GUI.Button(new Rect(r.x + 25 + d * 105, r.y + 120, 90, 70), $"Die {d + 1}", button)) { for (int p = 0; p < gameManager.Players.Count; p++) if (p != playerIndex && CanAffect(p, d)) gameManager.Players[p].dice[d] = UnityEngine.Random.Range(1, 7); CommitAndFinish(); } GUI.enabled = true;
+            GUI.enabled = available;
+            if (GUI.Button(new Rect(r.x + 25 + d * 105, r.y + 120, 90, 70), $"Die {d + 1}", button))
+            {
+                for (int p = 0; p < gameManager.Players.Count; p++) if (p != playerIndex && CanAffect(p, d)) gameManager.Players[p].dice[d] = UnityEngine.Random.Range(1, 7);
+                CommitAndFinish();
+            }
+            GUI.enabled = true;
         }
         if (GUI.Button(new Rect(r.x + 25, r.y + 285, 710, 55), "BACK", button)) step = Step.SpecialSoldierChoice;
     }
@@ -297,7 +305,7 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     {
         switch (type)
         {
-            case CardType.Artist: step = Step.SpecialArtistDie; break;
+            case CardType.Artist: step = Step.SpecialArtistChoice; break;
             case CardType.Knight: step = Step.SpecialSoldierChoice; break;
             case CardType.Collector: step = Step.SpecialCollectorChoice; break;
             case CardType.Bodyguard: step = Step.SpecialBodyguardChoice; break;
@@ -326,11 +334,20 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     {
         switch (step)
         {
-            case Step.DieAfterSkip: case Step.ArtistDie: case Step.BodyguardDie: case Step.SpecialArtistDie: case Step.SpecialSoldierDie: case Step.SpecialMirrorOwnDie: case Step.SpecialMirrorTargetDie: case Step.SpecialMirrorFirstDie: case Step.SpecialMirrorSecondDie: case Step.JokerDie: BackToCards(); break;
+            case Step.DieAfterSkip: BackToCards(); break;
+            case Step.ArtistDie: BackToCards(); break;
+            case Step.BodyguardDie: BackToCards(); break;
+            case Step.SpecialArtistDie: step = Step.SpecialArtistChoice; break;
             case Step.SoldierDie: targetIndex = -1; step = Step.SoldierTarget; break;
             case Step.MirrorOwnDie: targetIndex = -1; step = Step.MirrorTarget; break;
             case Step.MirrorTargetDie: ownDieIndex = -1; step = Step.MirrorOwnDie; break;
+            case Step.SpecialSoldierDie: targetIndex = -1; step = Step.SpecialSoldierTarget; break;
             case Step.SpecialSoldierAllDie: step = Step.SpecialSoldierChoice; break;
+            case Step.SpecialMirrorOwnDie: targetIndex = -1; step = Step.SpecialMirrorTarget; break;
+            case Step.SpecialMirrorTargetDie: ownDieIndex = -1; step = Step.SpecialMirrorOwnDie; break;
+            case Step.SpecialMirrorFirstDie: targetIndex = -1; ownDieIndex = -1; step = Step.SpecialMirrorFirstOpponent; break;
+            case Step.SpecialMirrorSecondDie: secondTargetIndex = -1; ownDieIndex = -1; step = Step.SpecialMirrorSecondOpponent; break;
+            case Step.JokerDie: targetIndex = -1; step = Step.JokerTarget; break;
         }
     }
 
@@ -356,16 +373,16 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         {
             case Step.DieAfterSkip:
                 int skipped = playerIndex; if (gameManager.TrySkipCardAction(skipped)) gameManager.TryPlayDie(skipped, die); break;
-            case Step.ArtistDie: Reroll(playerIndex, die, 1); CommitAndFinish(); break;
+            case Step.ArtistDie: if (gameManager.IsDieAvailable(playerIndex, die)) { Reroll(playerIndex, die, 1); CommitAndFinish(); } break;
             case Step.SoldierDie: if (CanAffect(targetIndex, die)) { Reroll(targetIndex, die, 1); CommitAndFinish(); } break;
-            case Step.BodyguardDie: bodyguards.Add(Key(playerIndex, die)); CommitAndFinish(); break;
-            case Step.MirrorOwnDie: ownDieIndex = die; step = Step.MirrorTargetDie; break;
+            case Step.BodyguardDie: if (gameManager.IsDieAvailable(playerIndex, die)) { bodyguards.Add(Key(playerIndex, die)); CommitAndFinish(); } break;
+            case Step.MirrorOwnDie: if (gameManager.IsDieAvailable(playerIndex, die)) { ownDieIndex = die; step = Step.MirrorTargetDie; } break;
             case Step.MirrorTargetDie: if (CanAffect(targetIndex, die)) { Exchange(playerIndex, ownDieIndex, targetIndex, die); CommitAndFinish(); } break;
-            case Step.SpecialArtistDie: Reroll(playerIndex, die, 3); CommitAndFinish(); break;
+            case Step.SpecialArtistDie: if (gameManager.IsDieAvailable(playerIndex, die)) { Reroll(playerIndex, die, 3); CommitAndFinish(); } break;
             case Step.SpecialSoldierDie: if (CanAffect(targetIndex, die)) { Reroll(targetIndex, die, 1); CommitAndFinish(); } break;
-            case Step.SpecialMirrorOwnDie: ownDieIndex = die; step = Step.SpecialMirrorTargetDie; break;
+            case Step.SpecialMirrorOwnDie: if (gameManager.IsDieAvailable(playerIndex, die)) { ownDieIndex = die; step = Step.SpecialMirrorTargetDie; } break;
             case Step.SpecialMirrorTargetDie: if (CanAffect(targetIndex, die)) { Exchange(playerIndex, ownDieIndex, targetIndex, die); CommitAndFinish(); } break;
-            case Step.SpecialMirrorFirstDie: ownDieIndex = die; step = Step.SpecialMirrorSecondOpponent; break;
+            case Step.SpecialMirrorFirstDie: if (CanAffect(targetIndex, die)) { ownDieIndex = die; step = Step.SpecialMirrorSecondOpponent; } break;
             case Step.SpecialMirrorSecondDie: if (CanAffect(secondTargetIndex, die)) { Exchange(targetIndex, ownDieIndex, secondTargetIndex, die); CommitAndFinish(); } break;
             case Step.JokerDie: if (CanAffect(targetIndex, die)) { int v = gameManager.Players[targetIndex].dice[die]; gameManager.Players[targetIndex].dice[die] = 7 - v; CommitAndFinish(); } break;
         }
@@ -375,14 +392,13 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     {
         if (stolen == null) return;
         gameManager.Players[targetIndex].hand.RemoveCard(stolen);
-        CommitCardOnly();
-        activeCard = stolen; RouteStolen(stolen);
+        CommitCardOnly(); activeCard = stolen; RouteStolen(stolen);
     }
 
     private void ModifierChosen(int p, int d)
     {
         if (!gameManager.IsDieAvailable(p, d) || !CanAffect(p, d)) return;
-        int v = gameManager.Players[p].dice[d]; if (modifierDirection > 0 && v >= 6 || modifierDirection < 0 && v <= 1) return;
+        int v = gameManager.Players[p].dice[d]; if ((modifierDirection > 0 && v >= 6) || (modifierDirection < 0 && v <= 1)) return;
         string key = Key(p, d); if (modifierOriginal.ContainsKey(key)) return;
         modifierOriginal[key] = v; gameManager.Players[p].dice[d] = v + modifierDirection; CommitAndFinish();
     }
@@ -399,8 +415,25 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         if (!cancelled) cardBlockedThisHand.Add(target); CommitAndFinish();
     }
 
+    private void ChooseSpecialArtist(int option)
+    {
+        if (option == 0) step = Step.SpecialArtistDie;
+        else
+        {
+            CardadoPlayerState p = gameManager.Players[playerIndex];
+            for (int d = 0; d < p.dice.Count; d++) if (gameManager.IsDieAvailable(playerIndex, d)) p.dice[d] = UnityEngine.Random.Range(1, 7);
+            CommitAndFinish();
+        }
+    }
+
     private void ChooseSpecialSoldier(int option) { step = option == 0 ? Step.SpecialSoldierTarget : Step.SpecialSoldierAllDie; }
-    private void ResolveSpecialSoldier(int target) { if (!CanAffectPlayer(target)) return; for (int d = 0; d < gameManager.Players[target].dice.Count; d++) if (CanAffect(target, d)) gameManager.Players[target].dice[d] = UnityEngine.Random.Range(1, 7); CommitAndFinish(); }
+
+    private void ResolveSpecialSoldier(int target)
+    {
+        if (!CanAffectPlayer(target)) return;
+        for (int d = 0; d < gameManager.Players[target].dice.Count; d++) if (CanAffect(target, d)) gameManager.Players[target].dice[d] = UnityEngine.Random.Range(1, 7);
+        CommitAndFinish();
+    }
 
     private void ChooseSpecialCollector(int option)
     {
@@ -456,13 +489,20 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
     }
 
     private void ChooseSpecialMirror(int option) { step = option == 0 ? Step.SpecialMirrorTarget : Step.SpecialMirrorFirstOpponent; }
-    private void ResolveSpecialExecutioner(int target) { if (!CanAffectPlayer(target)) return; CardadoPlayerState p = gameManager.Players[target]; List<CardInstance> cards = new List<CardInstance>(p.hand.cardsInHand); p.hand.cardsInHand.Clear(); foreach (CardInstance c in cards) gameManager.DiscardResolvedCard(c); CommitAndFinish(); }
+
+    private void ResolveSpecialExecutioner(int target)
+    {
+        if (!CanAffectPlayer(target)) return;
+        CardadoPlayerState p = gameManager.Players[target]; List<CardInstance> cards = new List<CardInstance>(p.hand.cardsInHand); p.hand.cardsInHand.Clear();
+        foreach (CardInstance c in cards) gameManager.DiscardResolvedCard(c);
+        CommitAndFinish();
+    }
 
     private void ChooseGordon(int option)
     {
         switch (option)
         {
-            case 0: step = Step.SpecialArtistDie; break;
+            case 0: step = Step.SpecialArtistChoice; break;
             case 1: step = Step.SpecialSoldierChoice; break;
             case 2: step = Step.SpecialCollectorChoice; break;
             default: step = Step.SpecialBodyguardChoice; break;
@@ -474,7 +514,8 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
         CommitCardOnly();
         for (int p = 0; p < gameManager.Players.Count; p++)
         {
-            List<CardInstance> cards = new List<CardInstance>(gameManager.Players[p].hand.cardsInHand); gameManager.Players[p].hand.cardsInHand.Clear(); foreach (CardInstance c in cards) gameManager.DiscardResolvedCard(c);
+            List<CardInstance> cards = new List<CardInstance>(gameManager.Players[p].hand.cardsInHand); gameManager.Players[p].hand.cardsInHand.Clear();
+            foreach (CardInstance c in cards) gameManager.DiscardResolvedCard(c);
         }
         for (int p = 0; p < gameManager.Players.Count; p++) for (int i = 0; i < 3; i++) { CardInstance c = gameManager.RoundDeck.Draw(); if (c == null) break; gameManager.Players[p].hand.AddCard(c); }
         BeginAnotherCardOrDie();
@@ -489,7 +530,6 @@ public class CardadoCardActionDevelopmentOverlay : MonoBehaviour
 
     private void Reroll(int p, int d, int times) { for (int i = 0; i < times; i++) gameManager.Players[p].dice[d] = UnityEngine.Random.Range(1, 7); }
     private void Exchange(int a, int ad, int b, int bd) { int v = gameManager.Players[a].dice[ad]; gameManager.Players[a].dice[ad] = gameManager.Players[b].dice[bd]; gameManager.Players[b].dice[bd] = v; }
-
     private bool CanAffect(int p, int d) => gameManager.IsDieAvailable(p, d) && CanAffectPlayer(p) && !bodyguards.Contains(Key(p, d));
     private bool CanAffectPlayer(int p) => p >= 0 && p < gameManager.Players.Count && (p == playerIndex || !protectedPlayersThisRound.Contains(p));
     private string Key(int p, int d) => p + ":" + d;
