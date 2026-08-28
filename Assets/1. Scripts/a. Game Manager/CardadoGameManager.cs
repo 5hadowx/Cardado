@@ -2,22 +2,14 @@ using System;
 using System.Collections.Generic;
 using UnityEngine;
 
-public enum CardadoGamePhase
-{
-    WaitingForDealer, RoundSetupRoll, DealerSetupDecision, Prediction, RollDice, RevealDice,
-    CardActionDecision, PlayingHands, RoundResolution, WarResolution, GameOver
-}
-
+public enum CardadoGamePhase { WaitingForDealer, RoundSetupRoll, DealerSetupDecision, Prediction, RollDice, RevealDice, CardActionDecision, PlayingHands, RoundResolution, WarResolution, GameOver }
 public enum CardadoCardActionRequestType { ChooseCard, ChooseArtistDie }
 
 public class CardadoGameManager : MonoBehaviour
 {
-    [Header("Match Setup")]
     [SerializeField] private CardadoMatchConfig matchConfig = new CardadoMatchConfig();
     [SerializeField, Min(2)] private int maxPlayers = 5;
-    [Header("Players")]
     [SerializeField] private List<string> playerIds = new List<string> { "Player 1", "Player 2", "Player 3", "Player 4" };
-    [Header("Cards")]
     [SerializeField] private CardData[] allCards;
 
     public IReadOnlyList<CardadoPlayerState> Players => players;
@@ -59,6 +51,7 @@ public class CardadoGameManager : MonoBehaviour
 
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
+    private readonly List<int> currentHandPlayOrder = new List<int>();
     private Queue<RoundSetupDecisionType> pendingDealerDecisions;
     private int handTurnsCompleted;
 
@@ -69,8 +62,7 @@ public class CardadoGameManager : MonoBehaviour
         ValidatePlayerConfiguration();
         BuildPlayers();
         InitializeDeck();
-        if (GetComponent<CardadoCardActionDevelopmentOverlay>() == null)
-            gameObject.AddComponent<CardadoCardActionDevelopmentOverlay>();
+        if (GetComponent<CardadoCardActionDevelopmentOverlay>() == null) gameObject.AddComponent<CardadoCardActionDevelopmentOverlay>();
     }
 
     public void SetDealer(int playerIndex)
@@ -170,6 +162,7 @@ public class CardadoGameManager : MonoBehaviour
         CurrentHandWinnerIndex = -1;
         CurrentHandWinningValue = 0;
         handTurnsCompleted = 0;
+        currentHandPlayOrder.Clear();
         BeginCurrentPlayerTurn();
     }
 
@@ -210,7 +203,6 @@ public class CardadoGameManager : MonoBehaviour
         CardInstance card = PendingCardActionCard;
         if (card == null || card.data == null || card.data.cardType != CardType.Artist || !IsDieAvailable(playerIndex, dieIndex)) return false;
         CardadoPlayerState player = players[playerIndex];
-        int oldValue = player.dice[dieIndex];
         int newValue = UnityEngine.Random.Range(1, 7);
         player.dice[dieIndex] = newValue;
         CardEffectResolved?.Invoke(player, card, dieIndex, newValue);
@@ -262,16 +254,11 @@ public class CardadoGameManager : MonoBehaviour
         ValidatePlayerIndex(playerIndex);
         if (Phase != CardadoGamePhase.PlayingHands || playerIndex != CurrentHandPlayerIndex) return false;
         CardadoPlayerState player = players[playerIndex];
-        if (dieIndex < 0 || dieIndex >= player.dice.Count || dieIndex >= player.playedDice.Count || player.playedDice[dieIndex]) return false;
+        if (!IsDieAvailable(playerIndex, dieIndex)) return false;
         int dieValue = player.dice[dieIndex];
-        if (dieValue <= 0) return false;
         player.playedDice[dieIndex] = true;
+        currentHandPlayOrder.Add(playerIndex);
         handTurnsCompleted++;
-        if (handTurnsCompleted == 1 || dieValue > CurrentHandWinningValue)
-        {
-            CurrentHandWinningValue = dieValue;
-            CurrentHandWinnerIndex = playerIndex;
-        }
         DiePlayed?.Invoke(player, dieIndex, dieValue);
         if (handTurnsCompleted < players.Count)
         {
@@ -312,23 +299,35 @@ public class CardadoGameManager : MonoBehaviour
             SetPhase(CardadoGamePhase.GameOver);
             return;
         }
-        if (winnersAtTarget.Count > 1)
-        {
-            MatchWinnerIndex = -1;
-            SetPhase(CardadoGamePhase.GameOver);
-            return;
-        }
+        if (winnersAtTarget.Count > 1) { MatchWinnerIndex = -1; SetPhase(CardadoGamePhase.GameOver); return; }
         MatchWinnerIndex = -1;
         SetDealer(GetNextPlayerIndex(DealerPlayerIndex));
     }
 
     private void CompleteCurrentHand()
     {
+        CurrentHandWinnerIndex = -1;
+        CurrentHandWinningValue = 0;
+        foreach (int playerIndex in currentHandPlayOrder)
+        {
+            CardadoPlayerState player = players[playerIndex];
+            int dieIndex = FindMostRecentlyPlayedDie(player);
+            if (dieIndex < 0) continue;
+            int value = player.dice[dieIndex];
+            if (CurrentHandWinnerIndex < 0 || value > CurrentHandWinningValue)
+            {
+                CurrentHandWinningValue = value;
+                CurrentHandWinnerIndex = playerIndex;
+            }
+        }
+
         int winnerIndex = CurrentHandWinnerIndex;
+        if (winnerIndex < 0) throw new InvalidOperationException("A completed hand has no winning die.");
         players[winnerIndex].handsWon++;
         StartingPlayerIndex = winnerIndex;
         CurrentHandStarterIndex = winnerIndex;
         HandCompleted?.Invoke(winnerIndex, CurrentHandWinningValue);
+
         if (CurrentHandNumber >= RoundDiceCount)
         {
             CurrentHandPlayerIndex = -1;
@@ -337,12 +336,24 @@ public class CardadoGameManager : MonoBehaviour
             ResolveRound();
             return;
         }
+
         CurrentHandNumber++;
         CurrentHandPlayerIndex = winnerIndex;
         CurrentHandWinnerIndex = -1;
         CurrentHandWinningValue = 0;
         handTurnsCompleted = 0;
+        currentHandPlayOrder.Clear();
         BeginCurrentPlayerTurn();
+    }
+
+    private int FindMostRecentlyPlayedDie(CardadoPlayerState player)
+    {
+        for (int i = 0; i < player.dice.Count; i++)
+            if (i < player.playedDice.Count && player.playedDice[i])
+                continue;
+        for (int i = player.dice.Count - 1; i >= 0; i--)
+            if (i < player.playedDice.Count && player.playedDice[i]) return i;
+        return -1;
     }
 
     private void BeginCurrentPlayerTurn()
@@ -359,16 +370,8 @@ public class CardadoGameManager : MonoBehaviour
         BeginDieSelectionForCurrentPlayer();
     }
 
-    private void BeginDieSelectionForCurrentPlayer()
-    {
-        SetPhase(CardadoGamePhase.PlayingHands);
-        NotifyHandTurnStarted();
-    }
-
-    private void NotifyHandTurnStarted()
-    {
-        if (CurrentHandPlayerIndex >= 0) HandTurnStarted?.Invoke(players[CurrentHandPlayerIndex], CurrentHandNumber, CurrentHandStarterIndex);
-    }
+    private void BeginDieSelectionForCurrentPlayer() { SetPhase(CardadoGamePhase.PlayingHands); NotifyHandTurnStarted(); }
+    private void NotifyHandTurnStarted() { if (CurrentHandPlayerIndex >= 0) HandTurnStarted?.Invoke(players[CurrentHandPlayerIndex], CurrentHandNumber, CurrentHandStarterIndex); }
 
     private void DealInitialHands()
     {
@@ -394,11 +397,7 @@ public class CardadoGameManager : MonoBehaviour
         {
             player.dice.Clear();
             player.playedDice.Clear();
-            for (int i = 0; i < RoundDiceCount; i++)
-            {
-                player.dice.Add(UnityEngine.Random.Range(1, 7));
-                player.playedDice.Add(false);
-            }
+            for (int i = 0; i < RoundDiceCount; i++) { player.dice.Add(UnityEngine.Random.Range(1, 7)); player.playedDice.Add(false); }
             PlayerDiceRolled?.Invoke(player);
         }
     }
@@ -440,18 +439,8 @@ public class CardadoGameManager : MonoBehaviour
         RoundSetupCompleted?.Invoke(RoundDiceCount, RoundCardCount);
     }
 
-    private void NotifyPredictionTurn()
-    {
-        if (CurrentPredictionPlayerIndex >= 0) PredictionTurnStarted?.Invoke(players[CurrentPredictionPlayerIndex], CurrentPredictionPlayerIndex);
-    }
-
-    private int GetPlacedDicePredictionsExcluding(int excludedPlayerIndex)
-    {
-        int total = 0;
-        for (int i = 0; i < players.Count; i++) if (i != excludedPlayerIndex && players[i].hasPlacedBid) total += players[i].diceBid;
-        return total;
-    }
-
+    private void NotifyPredictionTurn() { if (CurrentPredictionPlayerIndex >= 0) PredictionTurnStarted?.Invoke(players[CurrentPredictionPlayerIndex], CurrentPredictionPlayerIndex); }
+    private int GetPlacedDicePredictionsExcluding(int excludedPlayerIndex) { int total = 0; for (int i = 0; i < players.Count; i++) if (i != excludedPlayerIndex && players[i].hasPlacedBid) total += players[i].diceBid; return total; }
     private int GetPlayerToRightOf(int playerIndex) => players.Count == 0 ? -1 : (playerIndex + 1) % players.Count;
     private int GetNextPlayerIndex(int playerIndex) => (playerIndex + 1) % players.Count;
     private void SetPhase(CardadoGamePhase newPhase) { Phase = newPhase; PhaseChanged?.Invoke(newPhase); }
