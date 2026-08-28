@@ -52,6 +52,7 @@ public class CardadoGameManager : MonoBehaviour
     private readonly List<CardadoPlayerState> players = new List<CardadoPlayerState>();
     private readonly CardadoRoundSetup roundSetup = new CardadoRoundSetup();
     private readonly List<int> currentHandPlayOrder = new List<int>();
+    private readonly List<int> currentHandDieIndices = new List<int>();
     private Queue<RoundSetupDecisionType> pendingDealerDecisions;
     private int handTurnsCompleted;
 
@@ -163,6 +164,7 @@ public class CardadoGameManager : MonoBehaviour
         CurrentHandWinningValue = 0;
         handTurnsCompleted = 0;
         currentHandPlayOrder.Clear();
+        currentHandDieIndices.Clear();
         BeginCurrentPlayerTurn();
     }
 
@@ -203,9 +205,8 @@ public class CardadoGameManager : MonoBehaviour
         CardInstance card = PendingCardActionCard;
         if (card == null || card.data == null || card.data.cardType != CardType.Artist || !IsDieAvailable(playerIndex, dieIndex)) return false;
         CardadoPlayerState player = players[playerIndex];
-        int newValue = UnityEngine.Random.Range(1, 7);
-        player.dice[dieIndex] = newValue;
-        CardEffectResolved?.Invoke(player, card, dieIndex, newValue);
+        player.dice[dieIndex] = UnityEngine.Random.Range(1, 7);
+        CardEffectResolved?.Invoke(player, card, dieIndex, player.dice[dieIndex]);
         PendingCardActionCard = null;
         DiscardResolvedCard(card);
         BeginDieSelectionForCurrentPlayer();
@@ -258,6 +259,7 @@ public class CardadoGameManager : MonoBehaviour
         int dieValue = player.dice[dieIndex];
         player.playedDice[dieIndex] = true;
         currentHandPlayOrder.Add(playerIndex);
+        currentHandDieIndices.Add(dieIndex);
         handTurnsCompleted++;
         DiePlayed?.Invoke(player, dieIndex, dieValue);
         if (handTurnsCompleted < players.Count)
@@ -292,13 +294,7 @@ public class CardadoGameManager : MonoBehaviour
         foreach (var player in players) if (player.chips >= matchConfig.winningPoints) highestChipsAmongTargets = Math.Max(highestChipsAmongTargets, player.chips);
         if (highestChipsAmongTargets != int.MinValue)
             foreach (var player in players) if (player.chips >= matchConfig.winningPoints && player.chips == highestChipsAmongTargets) winnersAtTarget.Add(players.IndexOf(player));
-        if (winnersAtTarget.Count == 1)
-        {
-            MatchWinnerIndex = winnersAtTarget[0];
-            MatchWon?.Invoke(MatchWinnerIndex);
-            SetPhase(CardadoGamePhase.GameOver);
-            return;
-        }
+        if (winnersAtTarget.Count == 1) { MatchWinnerIndex = winnersAtTarget[0]; MatchWon?.Invoke(MatchWinnerIndex); SetPhase(CardadoGamePhase.GameOver); return; }
         if (winnersAtTarget.Count > 1) { MatchWinnerIndex = -1; SetPhase(CardadoGamePhase.GameOver); return; }
         MatchWinnerIndex = -1;
         SetDealer(GetNextPlayerIndex(DealerPlayerIndex));
@@ -308,12 +304,11 @@ public class CardadoGameManager : MonoBehaviour
     {
         CurrentHandWinnerIndex = -1;
         CurrentHandWinningValue = 0;
-        foreach (int playerIndex in currentHandPlayOrder)
+        for (int i = 0; i < currentHandPlayOrder.Count; i++)
         {
-            CardadoPlayerState player = players[playerIndex];
-            int dieIndex = FindMostRecentlyPlayedDie(player);
-            if (dieIndex < 0) continue;
-            int value = player.dice[dieIndex];
+            int playerIndex = currentHandPlayOrder[i];
+            int dieIndex = currentHandDieIndices[i];
+            int value = players[playerIndex].dice[dieIndex];
             if (CurrentHandWinnerIndex < 0 || value > CurrentHandWinningValue)
             {
                 CurrentHandWinningValue = value;
@@ -321,12 +316,11 @@ public class CardadoGameManager : MonoBehaviour
             }
         }
 
-        int winnerIndex = CurrentHandWinnerIndex;
-        if (winnerIndex < 0) throw new InvalidOperationException("A completed hand has no winning die.");
-        players[winnerIndex].handsWon++;
-        StartingPlayerIndex = winnerIndex;
-        CurrentHandStarterIndex = winnerIndex;
-        HandCompleted?.Invoke(winnerIndex, CurrentHandWinningValue);
+        if (CurrentHandWinnerIndex < 0) throw new InvalidOperationException("A completed hand has no winning die.");
+        players[CurrentHandWinnerIndex].handsWon++;
+        StartingPlayerIndex = CurrentHandWinnerIndex;
+        CurrentHandStarterIndex = CurrentHandWinnerIndex;
+        HandCompleted?.Invoke(CurrentHandWinnerIndex, CurrentHandWinningValue);
 
         if (CurrentHandNumber >= RoundDiceCount)
         {
@@ -338,22 +332,13 @@ public class CardadoGameManager : MonoBehaviour
         }
 
         CurrentHandNumber++;
-        CurrentHandPlayerIndex = winnerIndex;
+        CurrentHandPlayerIndex = CurrentHandWinnerIndex;
         CurrentHandWinnerIndex = -1;
         CurrentHandWinningValue = 0;
         handTurnsCompleted = 0;
         currentHandPlayOrder.Clear();
+        currentHandDieIndices.Clear();
         BeginCurrentPlayerTurn();
-    }
-
-    private int FindMostRecentlyPlayedDie(CardadoPlayerState player)
-    {
-        for (int i = 0; i < player.dice.Count; i++)
-            if (i < player.playedDice.Count && player.playedDice[i])
-                continue;
-        for (int i = player.dice.Count - 1; i >= 0; i--)
-            if (i < player.playedDice.Count && player.playedDice[i]) return i;
-        return -1;
     }
 
     private void BeginCurrentPlayerTurn()
