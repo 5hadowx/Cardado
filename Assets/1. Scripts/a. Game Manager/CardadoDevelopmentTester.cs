@@ -201,28 +201,78 @@ public class CardadoDevelopmentTester : MonoBehaviour
     {
         EnsureStyles();
         CardadoPlayerState player = gameManager.Players[predictionPlayerIndex];
-        const float width = 760f;
-        const float height = 330f;
+
+        // Keep the prediction panel compact enough for the development window while
+        // restoring the player's rolled dice as decision-making information.
+        const float width = 800f;
+        const float height = 350f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
         GUI.Box(panel, GUIContent.none, panelStyle);
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f), $"{player.playerId} — DICE PREDICTION", titleStyle);
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 70f, width - 50f, 35f), $"You have {gameManager.RoundDiceCount} dice. Predict how many hands you will win.", GUI.skin.label);
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 105f, width - 50f, 35f), $"You know your dice and that each player receives {gameManager.RoundCardCount} card(s), but you do not know your cards yet.", GUI.skin.label);
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
+            $"{player.playerId} — DICE PREDICTION", titleStyle);
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 75f, 480f, 35f),
+            $"You have {gameManager.RoundDiceCount} dice. Predict how many hands you will win.", GUI.skin.label);
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 112f, 480f, 55f),
+            $"You know your dice and that each player receives {gameManager.RoundCardCount} card(s), but you do not know your cards yet.", GUI.skin.label);
+
+        DrawPredictionDiceSummary(player, panel);
+
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 175f, width - 50f, 30f),
+            "Select your predicted number of hands won.", GUI.skin.label);
+
         float buttonWidth = 70f;
         float spacing = 10f;
         float totalWidth = buttonWidth * (gameManager.RoundDiceCount + 1) + spacing * gameManager.RoundDiceCount;
         float startX = panel.x + (width - totalWidth) * 0.5f;
         int minimumPrediction = gameManager.GetMinimumDicePredictionForPlayer(predictionPlayerIndex);
+
         for (int value = 0; value <= gameManager.RoundDiceCount; value++)
         {
-            if (value < minimumPrediction || !gameManager.IsValidDicePrediction(predictionPlayerIndex, value)) continue;
-            Rect buttonRect = new Rect(startX + value * (buttonWidth + spacing), panel.y + 170f, buttonWidth, 60f);
+            if (value < minimumPrediction || !gameManager.IsValidDicePrediction(predictionPlayerIndex, value))
+                continue;
+
+            Rect buttonRect = new Rect(startX + value * (buttonWidth + spacing), panel.y + 210f, buttonWidth, 60f);
             GUIStyle style = selectedDicePrediction == value ? selectedButtonStyle : buttonStyle;
-            if (GUI.Button(buttonRect, value.ToString(), style)) selectedDicePrediction = value;
+            if (GUI.Button(buttonRect, value.ToString(), style))
+                selectedDicePrediction = value;
         }
-        Rect confirmRect = new Rect(panel.x + 25f, panel.y + 255f, width - 50f, 50f);
-        if (selectedDicePrediction >= 0 && GUI.Button(confirmRect, "CONFIRM PREDICTION", selectedButtonStyle)) ResolvePrediction();
-        else if (selectedDicePrediction < 0) GUI.Label(confirmRect, "Select your predicted number of hands won.", GUI.skin.label);
+
+        Rect confirmRect = new Rect(panel.x + 25f, panel.y + 285f, width - 50f, 50f);
+        if (selectedDicePrediction >= 0 && GUI.Button(confirmRect, "CONFIRM PREDICTION", selectedButtonStyle))
+            ResolvePrediction();
+        else if (selectedDicePrediction < 0)
+            GUI.Label(confirmRect, "Select your predicted number of hands won.", GUI.skin.label);
+    }
+
+    private void DrawPredictionDiceSummary(CardadoPlayerState player, Rect panel)
+    {
+        const float summaryWidth = 250f;
+        const float summaryHeight = 105f;
+        Rect summary = new Rect(panel.x + 525f, panel.y + 68f, summaryWidth, summaryHeight);
+
+        GUI.Box(summary, GUIContent.none, panelStyle);
+        GUI.Label(new Rect(summary.x + 10f, summary.y + 8f, summaryWidth - 20f, 28f), "YOUR ROLLED DICE", titleStyle);
+
+        if (player.dice == null || player.dice.Count == 0)
+        {
+            GUI.Label(new Rect(summary.x + 10f, summary.y + 45f, summaryWidth - 20f, 30f), "No dice rolled.", GUI.skin.label);
+            return;
+        }
+
+        float dieWidth = 48f;
+        float dieHeight = 42f;
+        float gap = 8f;
+        float totalWidth = player.dice.Count * dieWidth + Mathf.Max(0, player.dice.Count - 1) * gap;
+        float startX = summary.x + (summaryWidth - totalWidth) * 0.5f;
+
+        for (int dieIndex = 0; dieIndex < player.dice.Count; dieIndex++)
+        {
+            Rect dieRect = new Rect(startX + dieIndex * (dieWidth + gap), summary.y + 48f, dieWidth, dieHeight);
+            GUI.Label(dieRect, $"D{dieIndex + 1}\n{player.dice[dieIndex]}", buttonStyle);
+        }
     }
 
     private void DrawDieChoicePanel()
