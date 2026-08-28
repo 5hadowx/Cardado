@@ -11,13 +11,12 @@ public class CardadoDevelopmentTester : MonoBehaviour
     [SerializeField] private bool startOnPlay = true;
 
     private bool showDealerChoice;
-    private bool showBettingChoice;
+    private bool showPredictionChoice;
     private bool showDieChoice;
     private bool cardActionOwnsUi;
-    private int bettingPlayerIndex = -1;
+    private int predictionPlayerIndex = -1;
     private int handPlayerIndex = -1;
-    private int selectedChipBet = 1;
-    private int selectedDiceBid = -1;
+    private int selectedDicePrediction = -1;
     private GUIStyle panelStyle;
     private GUIStyle titleStyle;
     private GUIStyle buttonStyle;
@@ -44,8 +43,8 @@ public class CardadoDevelopmentTester : MonoBehaviour
         gameManager.RoundSetupCompleted += OnRoundSetupCompleted;
         gameManager.PlayerHandDealt += OnPlayerHandDealt;
         gameManager.PlayerDiceRolled += OnPlayerDiceRolled;
-        gameManager.BettingTurnStarted += OnBettingTurnStarted;
-        gameManager.BettingCompleted += OnBettingCompleted;
+        gameManager.PredictionTurnStarted += OnPredictionTurnStarted;
+        gameManager.PredictionCompleted += OnPredictionCompleted;
         gameManager.HandTurnStarted += OnHandTurnStarted;
         gameManager.CardActionRequested += OnCardActionRequested;
         gameManager.DiePlayed += OnDiePlayed;
@@ -66,10 +65,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
         }
     }
 
-    private void OnPhaseChanged(CardadoGamePhase phase)
-    {
-        Debug.Log($"[Cardado] Phase: {phase}");
-    }
+    private void OnPhaseChanged(CardadoGamePhase phase) => Debug.Log($"[Cardado] Phase: {phase}");
 
     private void OnSetupDiceRolled(RoundSetupRoll roll)
     {
@@ -86,20 +82,13 @@ public class CardadoDevelopmentTester : MonoBehaviour
     {
         showDealerChoice = false;
         Debug.Log($"[Cardado] Round setup complete: {diceCount} dice, {cardCount} cards per player.");
-
-        try
-        {
-            gameManager.BeginBetting();
-        }
-        catch (System.Exception exception)
-        {
-            Debug.LogException(exception);
-        }
+        try { gameManager.BeginPrediction(); }
+        catch (System.Exception exception) { Debug.LogException(exception); }
     }
 
     private void OnPlayerHandDealt(CardadoPlayerState player)
     {
-        // Detailed hand contents are logged by CardadoDevelopmentCardLogger.
+        Debug.Log($"[Cardado] {player.playerId} received {player.hand.cardsInHand.Count} card(s) after predictions.");
     }
 
     private void OnPlayerDiceRolled(CardadoPlayerState player)
@@ -107,33 +96,21 @@ public class CardadoDevelopmentTester : MonoBehaviour
         Debug.Log($"[Cardado] {player.playerId} rolled: {string.Join(", ", player.dice)}");
     }
 
-    private void OnBettingTurnStarted(CardadoPlayerState player, int playerIndex)
+    private void OnPredictionTurnStarted(CardadoPlayerState player, int playerIndex)
     {
-        bettingPlayerIndex = playerIndex;
-        selectedChipBet = 1;
-        selectedDiceBid = -1;
-        showBettingChoice = true;
-
-        Debug.Log($"[Cardado] ROUND CALL REQUIRED: {player.playerId}. Choose chip bet and predicted dice wins.");
+        predictionPlayerIndex = playerIndex;
+        selectedDicePrediction = -1;
+        showPredictionChoice = true;
+        Debug.Log($"[Cardado] PREDICTION REQUIRED: {player.playerId}. Predict how many hands you expect to win.");
     }
 
-    private void OnBettingCompleted()
+    private void OnPredictionCompleted()
     {
-        bettingPlayerIndex = -1;
-        showBettingChoice = false;
-        Debug.Log("[Cardado] All players have placed their round calls.");
-
+        predictionPlayerIndex = -1;
+        showPredictionChoice = false;
+        Debug.Log("[Cardado] All dice predictions are complete. Cards are now dealt.");
         foreach (CardadoPlayerState player in gameManager.Players)
-            Debug.Log($"[Cardado] {player.playerId}: bet {player.roundBet} chip(s), predicts {player.diceBid} dice.");
-
-        try
-        {
-            gameManager.BeginPlayingHands();
-        }
-        catch (System.Exception exception)
-        {
-            Debug.LogException(exception);
-        }
+            Debug.Log($"[Cardado] {player.playerId}: predicts {player.diceBid} dice; cards now in hand: {player.hand.cardsInHand.Count}.");
     }
 
     private void OnHandTurnStarted(CardadoPlayerState player, int handNumber, int handStarterIndex)
@@ -170,7 +147,6 @@ public class CardadoDevelopmentTester : MonoBehaviour
         cardActionOwnsUi = false;
         handPlayerIndex = -1;
         Debug.Log("[Cardado] All dice have been played. Round is ready for resolution.");
-
         foreach (CardadoPlayerState player in gameManager.Players)
             Debug.Log($"[Cardado] {player.playerId}: {player.handsWon} hand(s) won, prediction {player.diceBid}.");
     }
@@ -178,11 +154,7 @@ public class CardadoDevelopmentTester : MonoBehaviour
     private int GetPlayerIndex(CardadoPlayerState player)
     {
         for (int i = 0; i < gameManager.Players.Count; i++)
-        {
-            if (gameManager.Players[i] == player)
-                return i;
-        }
-
+            if (gameManager.Players[i] == player) return i;
         return -1;
     }
 
@@ -194,9 +166,9 @@ public class CardadoDevelopmentTester : MonoBehaviour
             return;
         }
 
-        if (showBettingChoice && gameManager != null && bettingPlayerIndex >= 0)
+        if (showPredictionChoice && gameManager != null && predictionPlayerIndex >= 0)
         {
-            DrawBettingPanel();
+            DrawPredictionPanel();
             return;
         }
 
@@ -207,137 +179,70 @@ public class CardadoDevelopmentTester : MonoBehaviour
     private void DrawDealerChoicePanel()
     {
         EnsureStyles();
-
         const float width = 520f;
         const float height = 230f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
-
         GUI.Box(panel, GUIContent.none, panelStyle);
-
-        string choiceLabel = gameManager.PendingDealerDecision.Value == RoundSetupDecisionType.ChooseDiceCount
-            ? "DICE"
-            : "CARDS";
-
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
-            $"DEALER — CHOOSE {choiceLabel}", titleStyle);
-
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 65f, width - 50f, 35f),
-            "Select a value from 1 to 5.", GUI.skin.label);
-
+        string choiceLabel = gameManager.PendingDealerDecision.Value == RoundSetupDecisionType.ChooseDiceCount ? "DICE" : "CARDS";
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f), $"DEALER — CHOOSE {choiceLabel}", titleStyle);
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 65f, width - 50f, 35f), "Select a value from 1 to 5.", GUI.skin.label);
         float buttonWidth = 78f;
         float spacing = 10f;
         float totalWidth = buttonWidth * 5f + spacing * 4f;
         float startX = panel.x + (width - totalWidth) * 0.5f;
-
         for (int value = 1; value <= 5; value++)
         {
             Rect buttonRect = new Rect(startX + (value - 1) * (buttonWidth + spacing), panel.y + 120f, buttonWidth, 60f);
-            if (GUI.Button(buttonRect, value.ToString(), buttonStyle))
-                ResolveDealerChoice(value);
+            if (GUI.Button(buttonRect, value.ToString(), buttonStyle)) ResolveDealerChoice(value);
         }
     }
 
-    private void DrawBettingPanel()
+    private void DrawPredictionPanel()
     {
         EnsureStyles();
-
-        int maximumChipBet = gameManager.GetMaximumRoundBetForPlayer(bettingPlayerIndex);
-        CardadoPlayerState player = gameManager.Players[bettingPlayerIndex];
-
+        CardadoPlayerState player = gameManager.Players[predictionPlayerIndex];
         const float width = 760f;
-        const float height = 390f;
+        const float height = 330f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
-
         GUI.Box(panel, GUIContent.none, panelStyle);
-
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, 455f, 45f),
-            $"{player.playerId} — ROUND CALL", titleStyle);
-
-        DrawRolledDiceSummary(player, panel);
-
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 120f, width - 50f, 30f),
-            $"Choose chips to bet (minimum 1, maximum {maximumChipBet}).", GUI.skin.label);
-
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f), $"{player.playerId} — DICE PREDICTION", titleStyle);
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 70f, width - 50f, 35f), $"You have {gameManager.RoundDiceCount} dice. Predict how many hands you will win.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 105f, width - 50f, 35f), $"You know your dice and that each player receives {gameManager.RoundCardCount} card(s), but you do not know your cards yet.", GUI.skin.label);
         float buttonWidth = 70f;
         float spacing = 10f;
-        float chipStartX = panel.x + 25f;
-        float chipY = panel.y + 155f;
-
-        for (int value = 1; value <= maximumChipBet; value++)
-        {
-            Rect buttonRect = new Rect(chipStartX + (value - 1) * (buttonWidth + spacing), chipY, buttonWidth, 55f);
-            GUIStyle style = selectedChipBet == value ? selectedButtonStyle : buttonStyle;
-            if (GUI.Button(buttonRect, value.ToString(), style))
-                selectedChipBet = value;
-        }
-
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 230f, width - 50f, 30f),
-            $"Predict dice won (0 to {gameManager.RoundDiceCount}).", GUI.skin.label);
-
-        float diceStartX = panel.x + 25f;
-        float diceY = panel.y + 267f;
-        int minimumDiceBid = gameManager.GetMinimumDicePredictionForPlayer(bettingPlayerIndex);
-
+        float totalWidth = buttonWidth * (gameManager.RoundDiceCount + 1) + spacing * gameManager.RoundDiceCount;
+        float startX = panel.x + (width - totalWidth) * 0.5f;
+        int minimumPrediction = gameManager.GetMinimumDicePredictionForPlayer(predictionPlayerIndex);
         for (int value = 0; value <= gameManager.RoundDiceCount; value++)
         {
-            if (value < minimumDiceBid || !gameManager.IsValidDicePrediction(bettingPlayerIndex, value))
-                continue;
-
-            Rect buttonRect = new Rect(diceStartX + value * (buttonWidth + spacing), diceY, buttonWidth, 55f);
-            GUIStyle style = selectedDiceBid == value ? selectedButtonStyle : buttonStyle;
-            if (GUI.Button(buttonRect, value.ToString(), style))
-                selectedDiceBid = value;
+            if (value < minimumPrediction || !gameManager.IsValidDicePrediction(predictionPlayerIndex, value)) continue;
+            Rect buttonRect = new Rect(startX + value * (buttonWidth + spacing), panel.y + 170f, buttonWidth, 60f);
+            GUIStyle style = selectedDicePrediction == value ? selectedButtonStyle : buttonStyle;
+            if (GUI.Button(buttonRect, value.ToString(), style)) selectedDicePrediction = value;
         }
-
-        bool canConfirm = selectedDiceBid >= 0;
-        Rect confirmRect = new Rect(panel.x + 25f, panel.y + 345f, width - 50f, 50f);
-
-        if (canConfirm && GUI.Button(confirmRect, "CONFIRM ROUND CALL", selectedButtonStyle))
-            ResolveRoundCall();
-        else if (!canConfirm)
-            GUI.Label(confirmRect, "Select both the chip bet and dice prediction.", GUI.skin.label);
-    }
-
-    private void DrawRolledDiceSummary(CardadoPlayerState player, Rect panel)
-    {
-        GUI.Label(new Rect(panel.x + 500f, panel.y + 25f, 230f, 35f), "DICE", titleStyle);
-
-        if (player.dice == null || player.dice.Count == 0)
-        {
-            GUI.Label(new Rect(panel.x + 500f, panel.y + 65f, 230f, 35f), "—", GUI.skin.label);
-            return;
-        }
-
-        string diceValues = string.Join("   ", player.dice);
-        GUI.Label(new Rect(panel.x + 500f, panel.y + 65f, 230f, 55f), diceValues, buttonStyle);
+        Rect confirmRect = new Rect(panel.x + 25f, panel.y + 255f, width - 50f, 50f);
+        if (selectedDicePrediction >= 0 && GUI.Button(confirmRect, "CONFIRM PREDICTION", selectedButtonStyle)) ResolvePrediction();
+        else if (selectedDicePrediction < 0) GUI.Label(confirmRect, "Select your predicted number of hands won.", GUI.skin.label);
     }
 
     private void DrawDieChoicePanel()
     {
         EnsureStyles();
-
         CardadoPlayerState player = gameManager.Players[handPlayerIndex];
         int availableDice = gameManager.GetAvailableDieCount(handPlayerIndex);
         const float width = 760f;
         const float height = 300f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
-
         GUI.Box(panel, GUIContent.none, panelStyle);
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f),
-            $"{player.playerId} — CHOOSE A DIE", titleStyle);
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 68f, width - 50f, 30f),
-            "Card effects are not implemented yet. Choose a die directly for this test.", GUI.skin.label);
-
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 20f, width - 50f, 45f), $"{player.playerId} — CHOOSE A DIE", titleStyle);
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 68f, width - 50f, 30f), "Card effects are handled by the card-action overlay. Choose a die directly for this test.", GUI.skin.label);
         float buttonWidth = 90f;
         float spacing = 12f;
         float totalWidth = gameManager.RoundDiceCount * buttonWidth + (gameManager.RoundDiceCount - 1) * spacing;
         float startX = panel.x + (width - totalWidth) * 0.5f;
-
         for (int dieIndex = 0; dieIndex < player.dice.Count; dieIndex++)
         {
-            if (!gameManager.IsDieAvailable(handPlayerIndex, dieIndex))
-                continue;
-
+            if (!gameManager.IsDieAvailable(handPlayerIndex, dieIndex)) continue;
             Rect buttonRect = new Rect(startX + dieIndex * (buttonWidth + spacing), panel.y + 125f, buttonWidth, 70f);
             if (GUI.Button(buttonRect, $"Die {dieIndex + 1}\n{player.dice[dieIndex]}", buttonStyle))
             {
@@ -345,34 +250,23 @@ public class CardadoDevelopmentTester : MonoBehaviour
                 return;
             }
         }
-
-        GUI.Label(new Rect(panel.x + 25f, panel.y + 215f, width - 50f, 30f),
-            $"Available dice: {availableDice} / {gameManager.RoundDiceCount}", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25f, panel.y + 215f, width - 50f, 30f), $"Available dice: {availableDice} / {gameManager.RoundDiceCount}", GUI.skin.label);
     }
 
     private void ResolveDealerChoice(int value)
     {
-        try
-        {
-            gameManager.ResolveDealerChoice(value);
-        }
-        catch (System.Exception exception)
-        {
-            Debug.LogException(exception);
-        }
+        try { gameManager.ResolveDealerChoice(value); }
+        catch (System.Exception exception) { Debug.LogException(exception); }
     }
 
-    private void ResolveRoundCall()
+    private void ResolvePrediction()
     {
         try
         {
-            if (!gameManager.TryPlaceRoundCall(bettingPlayerIndex, selectedChipBet, selectedDiceBid))
-                Debug.LogWarning($"[Cardado] Round call rejected for Player {bettingPlayerIndex + 1}: {selectedChipBet} chip(s), {selectedDiceBid} dice.");
+            if (!gameManager.TryPlaceDicePrediction(predictionPlayerIndex, selectedDicePrediction))
+                Debug.LogWarning($"[Cardado] Prediction rejected for Player {predictionPlayerIndex + 1}: {selectedDicePrediction} dice.");
         }
-        catch (System.Exception exception)
-        {
-            Debug.LogException(exception);
-        }
+        catch (System.Exception exception) { Debug.LogException(exception); }
     }
 
     private void ResolveDieChoice(int dieIndex)
@@ -382,53 +276,29 @@ public class CardadoDevelopmentTester : MonoBehaviour
             if (!gameManager.TryPlayDie(handPlayerIndex, dieIndex))
                 Debug.LogWarning($"[Cardado] Die choice rejected for Player {handPlayerIndex + 1}: die {dieIndex + 1}.");
         }
-        catch (System.Exception exception)
-        {
-            Debug.LogException(exception);
-        }
+        catch (System.Exception exception) { Debug.LogException(exception); }
     }
 
     private void EnsureStyles()
     {
-        if (panelStyle != null)
-            return;
-
-        panelStyle = new GUIStyle(GUI.skin.box);
-        panelStyle.padding = new RectOffset(20, 20, 20, 20);
-
-        titleStyle = new GUIStyle(GUI.skin.label)
-        {
-            fontSize = 24,
-            fontStyle = FontStyle.Bold,
-            alignment = TextAnchor.MiddleCenter
-        };
-
-        buttonStyle = new GUIStyle(GUI.skin.button)
-        {
-            fontSize = 22,
-            fontStyle = FontStyle.Bold
-        };
-
-        selectedButtonStyle = new GUIStyle(buttonStyle)
-        {
-            fontSize = 22,
-            fontStyle = FontStyle.Bold
-        };
+        if (panelStyle != null) return;
+        panelStyle = new GUIStyle(GUI.skin.box) { padding = new RectOffset(20, 20, 20, 20) };
+        titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 22, fontStyle = FontStyle.Bold };
+        selectedButtonStyle = new GUIStyle(buttonStyle) { fontSize = 22, fontStyle = FontStyle.Bold };
     }
 
     private void OnDestroy()
     {
-        if (gameManager == null)
-            return;
-
+        if (gameManager == null) return;
         gameManager.PhaseChanged -= OnPhaseChanged;
         gameManager.SetupDiceRolled -= OnSetupDiceRolled;
         gameManager.DealerDecisionRequested -= OnDealerDecisionRequested;
         gameManager.RoundSetupCompleted -= OnRoundSetupCompleted;
         gameManager.PlayerHandDealt -= OnPlayerHandDealt;
         gameManager.PlayerDiceRolled -= OnPlayerDiceRolled;
-        gameManager.BettingTurnStarted -= OnBettingTurnStarted;
-        gameManager.BettingCompleted -= OnBettingCompleted;
+        gameManager.PredictionTurnStarted -= OnPredictionTurnStarted;
+        gameManager.PredictionCompleted -= OnPredictionCompleted;
         gameManager.HandTurnStarted -= OnHandTurnStarted;
         gameManager.CardActionRequested -= OnCardActionRequested;
         gameManager.DiePlayed -= OnDiePlayed;
