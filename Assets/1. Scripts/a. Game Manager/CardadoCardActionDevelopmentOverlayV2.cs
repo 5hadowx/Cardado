@@ -170,7 +170,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
             case Step.ExecutionerTarget: Targets("EXECUTIONER", execMsg ?? "Choose an opponent.", false, true, Step.Cards); break;
             case Step.ExecutionerEffects: ExecutionerEffects(); break;
             case Step.SpecialArtistChoice: Choice("SPECIAL ARTIST", new[] { "REROLL ONE DIE 3 TIMES", "REROLL ALL YOUR DICE ONCE" }, ChooseSpecialArtist, Step.Cards); break;
-            case Step.SpecialArtistDie: Dice("SPECIAL ARTIST", "Choose one die for the first reroll.", pi); break;
+            case Step.SpecialArtistDie: Dice("SPECIAL ARTIST", "Choose one die. It will be rerolled three times.", pi); break;
             case Step.SpecialArtistRerollDecision: SpecialArtistRerollDecision(); break;
             case Step.SpecialSoldierChoice: Choice("SPECIAL SOLDIER", new[] { "ONE OPPONENT REROLLS ALL DICE", "ALL OPPONENTS REROLL ONE DIE" }, ChooseSpecialSoldier, Step.Cards); break;
             case Step.SpecialSoldierTarget: Targets("SPECIAL SOLDIER", "Choose the opponent.", false, false, Step.SpecialSoldierChoice); break;
@@ -231,8 +231,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         {
             var c = p.hand.cardsInHand[i];
             if (c == null || c.data == null) continue;
-            if (GUI.Button(new Rect(x + i * (bw + g), r.y + 120, bw, 90), c.data.id + "\n" + c.data.cardType + (c.data.isBlankCard ? "\nBlank" : ""), button))
-                Select(c);
+            if (GUI.Button(new Rect(x + i * (bw + g), r.y + 120, bw, 90), c.data.id + "\n" + c.data.cardType + (c.data.isBlankCard ? "\nBlank" : ""), button)) Select(c);
         }
         if (GUI.Button(new Rect(r.x + 20, r.y + 320, 860, 55), "SKIP CARD ACTION", button)) Skip();
     }
@@ -245,14 +244,12 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         GUI.Box(r, "", box);
         GUI.Label(new Rect(r.x + 20, r.y + 20, 720, 45), s.playerId + " — " + head, title);
         GUI.Label(new Rect(r.x + 20, r.y + 70, 720, 55), text, GUI.skin.label);
-
         bool cardTarget = step != Step.DieAfterSkip;
         int shown = 0;
         for (int d = 0; d < s.dice.Count; d++)
         {
             bool visibleDie = cardTarget ? IsTargetableDie(p, d) : gm.IsDieAvailable(p, d);
             if (!visibleDie) continue;
-
             Rect q = new Rect(r.x + 25 + shown * 105, r.y + 135, 90, 80);
             GUI.enabled = CanChoose(p, d);
             string status = IsCurrentHandPlayed(p, d) ? "\nPLAYED" : "\nAVAILABLE";
@@ -261,7 +258,6 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
             DrawValue(q, p, d);
             shown++;
         }
-
         if (GUI.Button(new Rect(r.x + 25, r.y + 305, 710, 55), "BACK", button)) BackDie();
     }
 
@@ -288,12 +284,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
             GUI.enabled = true;
             x += 160;
         }
-        if (GUI.Button(new Rect(r.x + 25, r.y + 270, 800, 55), "BACK", button))
-        {
-            step = back;
-            ti = si = -1;
-            execMsg = null;
-        }
+        if (GUI.Button(new Rect(r.x + 25, r.y + 270, 800, 55), "BACK", button)) { step = back; ti = si = -1; execMsg = null; }
     }
 
     void Pair(string head, string text, bool first)
@@ -326,8 +317,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         {
             var c = p.hand.cardsInHand[i];
             string label = c == null || c.data == null ? "CARD " + (i + 1) : c.data.id + "\n" + c.data.cardType + (c.data.isBlankCard ? "\nBlank" : "");
-            if (GUI.Button(new Rect(r.x + 25 + (i % 5) * 155, r.y + 110 + (i / 5) * 80, 140, 65), label, button))
-                Collector(c);
+            if (GUI.Button(new Rect(r.x + 25 + (i % 5) * 155, r.y + 110 + (i / 5) * 80, 140, 65), label, button)) Collector(c);
         }
         if (GUI.Button(new Rect(r.x + 25, r.y + 345, 770, 55), "BACK", button)) { step = Step.CollectorTarget; ti = -1; }
     }
@@ -379,6 +369,198 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         if (GUI.Button(new Rect(r.x + 35, r.y + 250 + opts.Length * 10, 750, 55), "BACK", button)) step = back;
     }
 
+    void SpecialSoldierAll()
+    {
+        Rect r = Box(760, 390);
+        GUI.Box(r, "", box);
+        GUI.Label(new Rect(r.x + 20, r.y + 20, 720, 45), "SPECIAL SOLDIER — CHOOSE DIE", title);
+        for (int d = 0; d < gm.RoundDiceCount; d++)
+        {
+            bool ok = false;
+            for (int p = 0; p < gm.Players.Count; p++) if (p != pi && CanAffect(p, d)) ok = true;
+            GUI.enabled = ok;
+            if (GUI.Button(new Rect(r.x + 25 + d * 105, r.y + 120, 90, 80), "Die " + (d + 1), button))
+            {
+                for (int p = 0; p < gm.Players.Count; p++) if (p != pi && CanAffect(p, d)) gm.Players[p].dice[d] = UnityEngine.Random.Range(1, 7);
+                Commit();
+            }
+            GUI.enabled = true;
+        }
+        if (GUI.Button(new Rect(r.x + 25, r.y + 285, 710, 55), "BACK", button)) step = Step.SpecialSoldierChoice;
+    }
+
+    void SpecialCollectorTake()
+    {
+        if (collectorPos >= collectorOpp.Count) { step = Step.SpecialCollectorPlay; return; }
+        int p = collectorOpp[collectorPos];
+        Rect r = Box(820, 400);
+        GUI.Box(r, "", box);
+        GUI.Label(new Rect(r.x + 20, r.y + 20, 780, 45), "SPECIAL COLLECTOR — TAKE FROM " + gm.Players[p].playerId, title);
+        for (int i = 0; i < gm.Players[p].hand.cardsInHand.Count; i++)
+        {
+            var c = gm.Players[p].hand.cardsInHand[i];
+            string label = c == null || c.data == null ? "CARD " + (i + 1) : c.data.id + "\n" + c.data.cardType + (c.data.isBlankCard ? "\nBlank" : "");
+            if (GUI.Button(new Rect(r.x + 25 + i * 155, r.y + 125, 140, 65), label, button)) TakeCollector(i);
+        }
+        if (GUI.Button(new Rect(r.x + 25, r.y + 285, 770, 55), "BACK", button)) step = Step.SpecialCollectorChoice;
+    }
+
+    void SpecialCollectorPlay()
+    {
+        Rect r = Box(850, 430);
+        GUI.Box(r, "", box);
+        GUI.Label(new Rect(r.x + 20, r.y + 20, 810, 45), "SPECIAL COLLECTOR — CHOOSE CARD TO PLAY", title);
+        for (int i = 0; i < collectorPool.Count; i++)
+        {
+            var c = collectorPool[i];
+            if (c != null && GUI.Button(new Rect(r.x + 25 + i * 165, r.y + 125, 150, 80), c.data.id + "\n" + c.data.cardType + (c.data.isBlankCard ? "\nBlank" : ""), button)) PlayCollector(i);
+        }
+        if (GUI.Button(new Rect(r.x + 25, r.y + 330, 800, 55), "BACK", button)) step = Step.SpecialCollectorTake;
+    }
+
+    void ExecutionerEffects()
+    {
+        Rect r = Box(820, 420);
+        GUI.Box(r, "", box);
+        GUI.Label(new Rect(r.x + 20, r.y + 20, 780, 45), "EXECUTIONER — " + gm.Players[ti].playerId, title);
+        GUI.Label(new Rect(r.x + 20, r.y + 70, 780, 35), "Choose the permanent effect to cancel.", GUI.skin.label);
+        for (int i = 0; i < execEffects.Count; i++) if (GUI.Button(new Rect(r.x + 25, r.y + 120 + i * 70, 760, 55), EffectText(execEffects[i]), button)) CancelEffect(execEffects[i]);
+        if (execEffects.Count == 0) GUI.Label(new Rect(r.x + 25, r.y + 120, 760, 35), "No cancelable permanent effect.", GUI.skin.label);
+        if (GUI.Button(new Rect(r.x + 25, r.y + 330, 760, 55), "BACK", button)) step = Step.ExecutionerTarget;
+    }
+
+    void Select(CardInstance c)
+    {
+        if (c == null || c.data == null) return;
+        active = c;
+        ti = si = di = -1;
+        mod = 0;
+        execMsg = null;
+        specialArtistRerolls = 0;
+        specialArtistDieIndex = -1;
+        if (c.data.isBlankCard) { Commit(); return; }
+        if (c.data.isModifier) { step = Step.ModifierDirection; return; }
+        if (c.data.rarity == CardRarity.Special) { RouteSpecial(c.data.cardType); return; }
+        if (c.data.rarity == CardRarity.Royalty) { RouteRoyalty(c.data.cardType); return; }
+        switch (c.data.cardType)
+        {
+            case CardType.Artist: step = Step.ArtistDie; break;
+            case CardType.Knight: step = Step.SoldierTarget; break;
+            case CardType.Collector: step = Step.CollectorTarget; break;
+            case CardType.Bodyguard: step = Step.BodyguardDie; break;
+            case CardType.Mirror: step = Step.MirrorTarget; break;
+            case CardType.Executioner: step = Step.ExecutionerTarget; break;
+            default: Commit(); break;
+        }
+    }
+
+    void RouteSpecial(CardType t)
+    {
+        switch (t)
+        {
+            case CardType.Artist: step = Step.SpecialArtistChoice; break;
+            case CardType.Knight: step = Step.SpecialSoldierChoice; break;
+            case CardType.Collector: step = Step.SpecialCollectorChoice; break;
+            case CardType.Bodyguard: step = Step.SpecialBodyguardChoice; break;
+            case CardType.Mirror: step = Step.SpecialMirrorChoice; break;
+            case CardType.Executioner: step = Step.SpecialExecutionerTarget; break;
+            default: Commit(); break;
+        }
+    }
+
+    void RouteRoyalty(CardType t)
+    {
+        switch (t)
+        {
+            case CardType.Joker: step = Step.JokerTarget; break;
+            case CardType.Queen: Queen(); break;
+            case CardType.King: King(); break;
+            case CardType.GordonRobleys: step = Step.GordonChoice; break;
+            default: Commit(); break;
+        }
+    }
+
+    void Skip() { active = null; step = Step.DieAfterSkip; ti = si = di = -1; mod = 0; }
+
+    void BackCards()
+    {
+        active = null;
+        ti = si = di = -1;
+        mod = 0;
+        execMsg = null;
+        collectorPool.Clear();
+        collectorOpp.Clear();
+        stolenNotice = null;
+        step = Step.Cards;
+    }
+
+    void BackDie()
+    {
+        switch (step)
+        {
+            case Step.DieAfterSkip:
+            case Step.ArtistDie:
+            case Step.BodyguardDie:
+            case Step.SpecialArtistDie:
+            case Step.JokerDie:
+                BackCards();
+                break;
+            case Step.SoldierDie: ti = -1; step = Step.SoldierTarget; break;
+            case Step.MirrorOwnDie: ti = -1; step = Step.MirrorTarget; break;
+            case Step.MirrorTargetDie: di = -1; step = Step.MirrorOwnDie; break;
+            case Step.SpecialSoldierDie: ti = -1; step = Step.SpecialSoldierTarget; break;
+            case Step.SpecialSoldierAllDie: step = Step.SpecialSoldierChoice; break;
+            case Step.SpecialMirrorOwnDie: ti = -1; step = Step.SpecialMirrorTarget; break;
+            case Step.SpecialMirrorTargetDie: di = -1; step = Step.SpecialMirrorOwnDie; break;
+            case Step.SpecialMirrorFirstDie: ti = -1; di = -1; step = Step.SpecialMirrorFirstOpponent; break;
+            case Step.SpecialMirrorSecondDie: si = -1; di = -1; step = Step.SpecialMirrorSecondOpponent; break;
+        }
+    }
+
+    void Target(int t)
+    {
+        ti = t;
+        switch (step)
+        {
+            case Step.SoldierTarget: step = Step.SoldierDie; break;
+            case Step.CollectorTarget: step = Step.CollectorCard; break;
+            case Step.MirrorTarget: step = Step.MirrorOwnDie; break;
+            case Step.ExecutionerTarget: Executioner(t); break;
+            case Step.SpecialSoldierTarget: SpecialSoldier(t); break;
+            case Step.SpecialMirrorTarget: step = Step.SpecialMirrorOwnDie; break;
+            case Step.SpecialExecutionerTarget: SpecialExecutioner(t); break;
+            case Step.SpecialBodyguardTarget: SpecialBodyguardPlayer(t); break;
+            case Step.JokerTarget: step = Step.JokerDie; break;
+        }
+    }
+
+    void Die(int d)
+    {
+        switch (step)
+        {
+            case Step.DieAfterSkip: gm.TryPlayDie(pi, d); break;
+            case Step.ArtistDie: Reroll(pi, d, 1); Commit(); break;
+            case Step.SoldierDie: if (CanAffect(ti, d)) { Reroll(ti, d, 1); Commit(); } break;
+            case Step.BodyguardDie: NormalBodyguard(d); break;
+            case Step.MirrorOwnDie: di = d; step = Step.MirrorTargetDie; break;
+            case Step.MirrorTargetDie: if (CanAffect(ti, d)) { Exchange(pi, di, ti, d); Commit(); } break;
+            case Step.SpecialArtistDie:
+                specialArtistDieIndex = d;
+                Reroll(pi, d, 1);
+                specialArtistRerolls = 1;
+                CommitCardOnly();
+                active = null;
+                step = Step.SpecialArtistRerollDecision;
+                break;
+            case Step.SpecialSoldierDie: if (CanAffect(ti, d)) { Reroll(ti, d, 1); Commit(); } break;
+            case Step.SpecialMirrorOwnDie: di = d; step = Step.SpecialMirrorTargetDie; break;
+            case Step.SpecialMirrorTargetDie: if (CanAffect(ti, d)) { Exchange(pi, di, ti, d); Commit(); } break;
+            case Step.SpecialMirrorFirstDie: di = d; step = Step.SpecialMirrorSecondOpponent; break;
+            case Step.SpecialMirrorSecondDie: if (CanAffect(si, d)) { Exchange(ti, di, si, d); Commit(); } break;
+            case Step.JokerDie: if (CanAffect(ti, d)) { gm.Players[ti].dice[d] = 7 - gm.Players[ti].dice[d]; Commit(); } break;
+        }
+    }
+
     void SpecialArtistRerollDecision()
     {
         if (specialArtistDieIndex < 0 || specialArtistDieIndex >= gm.Players[pi].dice.Count) return;
@@ -387,7 +569,6 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         GUI.Label(new Rect(r.x + 20, r.y + 20, 720, 45), "SPECIAL ARTIST — REROLL", title);
         GUI.Label(new Rect(r.x + 20, r.y + 70, 720, 45), "Die " + (specialArtistDieIndex + 1) + " is now " + gm.Players[pi].dice[specialArtistDieIndex] + ".", GUI.skin.label);
         GUI.Label(new Rect(r.x + 20, r.y + 110, 720, 35), "Rerolls used: " + specialArtistRerolls + " / 3", GUI.skin.label);
-
         if (specialArtistRerolls < 3)
         {
             if (GUI.Button(new Rect(r.x + 35, r.y + 165, 330, 65), "KEEP THIS VALUE", button)) FinishSpecialArtistReroll();
@@ -406,10 +587,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         Reroll(pi, specialArtistDieIndex, 1);
         specialArtistRerolls++;
         Debug.Log("[Cardado] Special Artist reroll " + specialArtistRerolls + "/3 for " + gm.Players[pi].playerId + " die " + (specialArtistDieIndex + 1) + ": " + gm.Players[pi].dice[specialArtistDieIndex]);
-        if (specialArtistRerolls >= 3)
-        {
-            FinishSpecialArtistReroll();
-        }
+        if (specialArtistRerolls >= 3) FinishSpecialArtistReroll();
     }
 
     void FinishSpecialArtistReroll()
@@ -469,20 +647,10 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
 
     void Executioner(int t)
     {
-        if (!playedCard.Contains(t))
-        {
-            blocked.Add(t);
-            Debug.Log("[Cardado] Executioner blocked " + gm.Players[t].playerId + " for this hand.");
-            Commit();
-            return;
-        }
+        if (!playedCard.Contains(t)) { blocked.Add(t); Debug.Log("[Cardado] Executioner blocked " + gm.Players[t].playerId + " for this hand."); Commit(); return; }
         execEffects.Clear();
         foreach (var e in effects) if (e.owner == t) execEffects.Add(e);
-        if (execEffects.Count == 0)
-        {
-            execMsg = gm.Players[t].playerId + " already played a card and has no cancelable permanent effect.";
-            step = Step.ExecutionerTarget;
-        }
+        if (execEffects.Count == 0) { execMsg = gm.Players[t].playerId + " already played a card and has no cancelable permanent effect."; step = Step.ExecutionerTarget; }
         else if (execEffects.Count == 1) CancelEffect(execEffects[0]);
         else step = Step.ExecutionerEffects;
     }
@@ -493,21 +661,11 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         switch (e.type)
         {
             case EffectType.Modifier:
-                if (modifierOriginal.ContainsKey(e.key))
-                {
-                    int[] k = Parse(e.key);
-                    if (k[0] >= 0 && k[1] >= 0) gm.Players[k[0]].dice[k[1]] = modifierOriginal[e.key];
-                    modifierOriginal.Remove(e.key);
-                }
+                if (modifierOriginal.ContainsKey(e.key)) { int[] k = Parse(e.key); if (k[0] >= 0 && k[1] >= 0) gm.Players[k[0]].dice[k[1]] = modifierOriginal[e.key]; modifierOriginal.Remove(e.key); }
                 break;
-            case EffectType.BodyguardDie:
-                protectedDice.Remove(e.key);
-                break;
-            case EffectType.SpecialBodyguardPlayer:
-                protectedPlayers.Remove(e.target);
-                break;
-            case EffectType.SpecialBodyguardHand:
-                break;
+            case EffectType.BodyguardDie: protectedDice.Remove(e.key); break;
+            case EffectType.SpecialBodyguardPlayer: protectedPlayers.Remove(e.target); break;
+            case EffectType.SpecialBodyguardHand: break;
         }
         RemoveEffectObj(e, true);
         Commit();
@@ -516,12 +674,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
     void ChooseSpecialArtist(int o)
     {
         if (o == 0) step = Step.SpecialArtistDie;
-        else
-        {
-            for (int d = 0; d < gm.Players[pi].dice.Count; d++)
-                if (CanAffect(pi, d)) gm.Players[pi].dice[d] = UnityEngine.Random.Range(1, 7);
-            Commit();
-        }
+        else { for (int d = 0; d < gm.Players[pi].dice.Count; d++) if (CanAffect(pi, d)) gm.Players[pi].dice[d] = UnityEngine.Random.Range(1, 7); Commit(); }
     }
 
     void ChooseSpecialSoldier(int o) { step = o == 0 ? Step.SpecialSoldierTarget : Step.SpecialSoldierAllDie; }
@@ -538,20 +691,11 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         if (o == 1)
         {
             CommitCardOnly();
-            for (int i = 0; i < 3; i++)
-            {
-                var c = gm.RoundDeck.Draw();
-                if (c == null) break;
-                gm.Players[pi].hand.AddCard(c);
-            }
-            After();
-            return;
+            for (int i = 0; i < 3; i++) { var c = gm.RoundDeck.Draw(); if (c == null) break; gm.Players[pi].hand.AddCard(c); }
+            After(); return;
         }
-        collectorPool.Clear();
-        collectorOpp.Clear();
-        collectorPos = 0;
-        for (int p = 0; p < gm.Players.Count; p++)
-            if (p != pi && gm.Players[p].hand.cardsInHand.Count > 0 && CanPlayer(p)) collectorOpp.Add(p);
+        collectorPool.Clear(); collectorOpp.Clear(); collectorPos = 0;
+        for (int p = 0; p < gm.Players.Count; p++) if (p != pi && gm.Players[p].hand.cardsInHand.Count > 0 && CanPlayer(p)) collectorOpp.Add(p);
         step = collectorOpp.Count == 0 ? Step.SpecialCollectorPlay : Step.SpecialCollectorTake;
     }
 
@@ -562,35 +706,23 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
         var c = gm.Players[p].hand.cardsInHand[i];
         string cardName = c != null && c.data != null ? c.data.id + " (" + c.data.cardType + (c.data.isBlankCard ? ", Blank" : "") + ")" : "unknown card";
         Debug.Log("[Cardado] SPECIAL COLLECTOR: " + gm.Players[pi].playerId + " stole " + cardName + " from " + gm.Players[p].playerId + ".");
-        gm.Players[p].hand.RemoveCard(c);
-        collectorPool.Add(c);
-        collectorPos++;
+        gm.Players[p].hand.RemoveCard(c); collectorPool.Add(c); collectorPos++;
         if (collectorPos >= collectorOpp.Count) step = Step.SpecialCollectorPlay;
     }
 
     void PlayCollector(int i)
     {
         if (i < 0 || i >= collectorPool.Count) return;
-        var c = collectorPool[i];
-        if (c == null || c.data == null) return;
+        var c = collectorPool[i]; if (c == null || c.data == null) return;
         stolenNotice = "STOLEN CARD: " + c.data.id + " (" + c.data.cardType + (c.data.isBlankCard ? ", Blank" : "") + ")";
         for (int x = 0; x < collectorPool.Count; x++) if (x != i) gm.DiscardResolvedCard(collectorPool[x]);
-        collectorPool.Clear();
-        CommitCardOnly();
-        active = c;
-        RouteStolen(c);
+        collectorPool.Clear(); CommitCardOnly(); active = c; RouteStolen(c);
     }
 
     void RouteStolen(CardInstance c)
     {
         if (c == null || c.data == null) return;
-        if (c.data.isBlankCard)
-        {
-            Debug.Log("[Cardado] COLLECTOR: stolen card " + (c.data.id ?? "unknown") + " is a blank card and has no effect.");
-            gm.DiscardResolvedCard(c);
-            After();
-            return;
-        }
+        if (c.data.isBlankCard) { Debug.Log("[Cardado] COLLECTOR: stolen card " + (c.data.id ?? "unknown") + " is a blank card and has no effect."); gm.DiscardResolvedCard(c); After(); return; }
         if (c.data.isModifier) { step = Step.ModifierDirection; return; }
         if (c.data.rarity == CardRarity.Special) { RouteSpecial(c.data.cardType); return; }
         if (c.data.rarity == CardRarity.Royalty) { RouteRoyalty(c.data.cardType); return; }
@@ -602,10 +734,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
             case CardType.Bodyguard: step = Step.BodyguardDie; break;
             case CardType.Mirror: step = Step.MirrorTarget; break;
             case CardType.Executioner: step = Step.ExecutionerTarget; break;
-            default:
-                gm.DiscardResolvedCard(c);
-                After();
-                break;
+            default: gm.DiscardResolvedCard(c); After(); break;
         }
     }
 
@@ -613,18 +742,14 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
     {
         if (o == 0) { step = Step.SpecialBodyguardTarget; return; }
         var e = new Effect { type = EffectType.SpecialBodyguardHand, card = active, owner = pi, key = "special_bodyguard_hand" };
-        effects.Add(e);
-        CommitPersistentCard();
-        After();
+        effects.Add(e); CommitPersistentCard(); After();
     }
 
     void SpecialBodyguardPlayer(int t)
     {
         protectedPlayers.Add(t);
         var e = new Effect { type = EffectType.SpecialBodyguardPlayer, card = active, owner = pi, target = t, key = "special_bodyguard_player:" + t };
-        effects.Add(e);
-        CommitPersistentCard();
-        After();
+        effects.Add(e); CommitPersistentCard(); After();
     }
 
     void ChooseSpecialMirror(int o) { step = o == 0 ? Step.SpecialMirrorTarget : Step.SpecialMirrorFirstOpponent; }
@@ -632,9 +757,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
     void SpecialExecutioner(int t)
     {
         if (!CanTargetIgnore(t)) return;
-        var p = gm.Players[t];
-        var cards = new List<CardInstance>(p.hand.cardsInHand);
-        p.hand.cardsInHand.Clear();
+        var p = gm.Players[t]; var cards = new List<CardInstance>(p.hand.cardsInHand); p.hand.cardsInHand.Clear();
         foreach (var c in cards) gm.DiscardResolvedCard(c);
         Commit();
     }
@@ -644,88 +767,48 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
     void Queen()
     {
         CommitCardOnly();
-        for (int p = 0; p < gm.Players.Count; p++)
-        {
-            var cards = new List<CardInstance>(gm.Players[p].hand.cardsInHand);
-            gm.Players[p].hand.cardsInHand.Clear();
-            foreach (var c in cards) gm.DiscardResolvedCard(c);
-        }
-        for (int p = 0; p < gm.Players.Count; p++) for (int i = 0; i < 3; i++)
-        {
-            var c = gm.RoundDeck.Draw();
-            if (c == null) break;
-            gm.Players[p].hand.AddCard(c);
-        }
+        for (int p = 0; p < gm.Players.Count; p++) { var cards = new List<CardInstance>(gm.Players[p].hand.cardsInHand); gm.Players[p].hand.cardsInHand.Clear(); foreach (var c in cards) gm.DiscardResolvedCard(c); }
+        for (int p = 0; p < gm.Players.Count; p++) for (int i = 0; i < 3; i++) { var c = gm.RoundDeck.Draw(); if (c == null) break; gm.Players[p].hand.AddCard(c); }
         Another();
     }
 
     void King()
     {
         CommitCardOnly();
-        for (int p = 0; p < gm.Players.Count; p++) for (int d = 0; d < gm.Players[p].dice.Count; d++)
-            if (CanAffect(p, d)) gm.Players[p].dice[d] = UnityEngine.Random.Range(1, 7);
+        for (int p = 0; p < gm.Players.Count; p++) for (int d = 0; d < gm.Players[p].dice.Count; d++) if (CanAffect(p, d)) gm.Players[p].dice[d] = UnityEngine.Random.Range(1, 7);
         Another();
     }
 
     void CommitPersistentCard()
     {
         if (active == null) return;
-        active.isPlayed = true;
-        gm.Players[pi].hand.RemoveCard(active);
-        playedCard.Add(pi);
-        active = null;
+        active.isPlayed = true; gm.Players[pi].hand.RemoveCard(active); playedCard.Add(pi); active = null;
     }
 
     void Persistent(Effect e)
     {
         if (e == null || active == null) return;
-        e.card.isPlayed = true;
-        gm.Players[pi].hand.RemoveCard(e.card);
-        effects.Add(e);
-        playedCard.Add(pi);
-        active = null;
-        After();
+        e.card.isPlayed = true; gm.Players[pi].hand.RemoveCard(e.card); effects.Add(e); playedCard.Add(pi); active = null; After();
     }
 
     void CommitCardOnly()
     {
         if (active == null) return;
-        active.isPlayed = true;
-        gm.Players[pi].hand.RemoveCard(active);
-        gm.DiscardResolvedCard(active);
-        playedCard.Add(pi);
+        active.isPlayed = true; gm.Players[pi].hand.RemoveCard(active); gm.DiscardResolvedCard(active); playedCard.Add(pi);
     }
 
     void Commit() { CommitCardOnly(); After(); }
 
     void After()
     {
-        active = null;
-        visible = false;
-        step = Step.None;
-        ti = si = di = -1;
-        mod = 0;
-        execMsg = null;
-        collectorOpp.Clear();
-        collectorPool.Clear();
-        gm.TrySkipCardAction(pi);
+        active = null; visible = false; step = Step.None; ti = si = di = -1; mod = 0; execMsg = null; collectorOpp.Clear(); collectorPool.Clear(); gm.TrySkipCardAction(pi);
     }
 
     void Another()
     {
-        active = null;
-        ti = si = di = -1;
-        execMsg = null;
-        if (gm.Players[pi].hand.cardsInHand.Count > 0)
-        {
-            visible = true;
-            step = Step.Cards;
-        }
-        else
-        {
-            visible = false;
-            gm.TrySkipCardAction(pi);
-        }
+        active = null; ti = si = di = -1; execMsg = null;
+        if (gm.Players[pi].hand.cardsInHand.Count > 0) { visible = true; step = Step.Cards; }
+        else { visible = false; gm.TrySkipCardAction(pi); }
     }
 
     bool CanChoose(int p, int d)
@@ -782,8 +865,7 @@ public class CardadoCardActionDevelopmentOverlayV2 : MonoBehaviour
 
     int[] Parse(string k)
     {
-        var a = k.Split(':');
-        int p, d;
+        var a = k.Split(':'); int p, d;
         if (a.Length != 2 || !int.TryParse(a[0], out p) || !int.TryParse(a[1], out d)) return new[] { -1, -1 };
         return new[] { p, d };
     }
