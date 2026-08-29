@@ -16,5 +16,8 @@ public static class CardadoCardActionDevelopmentBootstrap
 
         if (manager.GetComponent<CardadoCollectorDevelopmentFix>() == null)
             manager.gameObject.AddComponent<CardadoCollectorDevelopmentFix>();
+
+        if (manager.GetComponent<CardadoCollectorAndSkipDevelopmentFix>() == null)
+            manager.gameObject.AddComponent<CardadoCollectorAndSkipDevelopmentFix>();
     }
 }
