@@ -20,14 +20,12 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
     FieldInfo collectorPoolField;
     MethodInfo routeStolenMethod;
     MethodInfo targetMethod;
-    MethodInfo discardResolvedCardMethod;
 
-    bool suppressOriginal;
     bool selectedFromCollector;
     CardInstance selectedStolenCard;
     readonly List<CardInstance> stolenSnapshot = new List<CardInstance>();
 
-    GUIStyle box, title, button, small;
+    GUIStyle box, title, button;
 
     void Awake()
     {
@@ -45,7 +43,6 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         collectorPoolField = t.GetField("collectorPool", BindingFlags.Instance | BindingFlags.NonPublic);
         routeStolenMethod = t.GetMethod("RouteStolen", BindingFlags.Instance | BindingFlags.NonPublic);
         targetMethod = t.GetMethod("Target", BindingFlags.Instance | BindingFlags.NonPublic);
-        discardResolvedCardMethod = typeof(CardadoGameManager).GetMethod("DiscardResolvedCard", BindingFlags.Instance | BindingFlags.Public);
     }
 
     void Update()
@@ -53,22 +50,18 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         if (gm == null || overlay == null || stepField == null || visibleField == null) return;
 
         string step = GetStepName();
-        suppressOriginal = false;
 
         if (step == "SpecialCollectorPlay")
         {
             CaptureCollectorPool();
-            suppressOriginal = true;
             SetOverlayVisible(false);
         }
         else if (step == "SpecialExecutionerTarget" && selectedFromCollector)
         {
-            suppressOriginal = true;
             SetOverlayVisible(false);
         }
         else if (step == "ExecutionerTarget")
         {
-            suppressOriginal = true;
             SetOverlayVisible(false);
         }
         else if (selectedFromCollector && step != "SpecialExecutionerTarget")
@@ -98,17 +91,13 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         }
 
         if (step == "ExecutionerTarget")
-        {
             DrawExecutionerTarget(false);
-            return;
-        }
     }
 
     void CaptureCollectorPool()
     {
         if (collectorPoolField == null) return;
-        object raw = collectorPoolField.GetValue(overlay);
-        var pool = raw as List<CardInstance>;
+        var pool = collectorPoolField.GetValue(overlay) as List<CardInstance>;
         if (pool == null) return;
 
         if (stolenSnapshot.Count == 0 || !SamePool(pool, stolenSnapshot))
@@ -145,7 +134,6 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         {
             selectedFromCollector = false;
             selectedStolenCard = null;
-            stolenSnapshot.Clear();
             SetOverlayStep("SpecialCollectorTake");
             SetOverlayVisible(true);
         }
@@ -163,8 +151,8 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         SetOverlayVisible(true);
 
         // Route the stolen card without calling PlayCollector(). That method clears the
-        // stolen-card pool immediately, which made Back impossible. We defer discarding
-        // the unselected stolen cards until the chosen effect is actually committed.
+        // stolen-card pool immediately, which made Back impossible. Unselected cards stay
+        // in the pool until the chosen stolen-card effect is actually used.
         if (routeStolenMethod != null)
             routeStolenMethod.Invoke(overlay, new object[] { c });
     }
@@ -228,6 +216,8 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         pool.Clear();
         pool.AddRange(stolenSnapshot);
         SetOverlayActive(null);
+        selectedFromCollector = false;
+        selectedStolenCard = null;
     }
 
     void InvokeTarget(int playerIndex)
@@ -266,6 +256,5 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         box = new GUIStyle(GUI.skin.box) { padding = new RectOffset(20, 20, 20, 20) };
         title = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         button = new GUIStyle(GUI.skin.button) { fontSize = 17, fontStyle = FontStyle.Bold };
-        small = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
     }
 }
