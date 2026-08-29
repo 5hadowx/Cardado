@@ -7,9 +7,14 @@ public static class CardadoCardActionDevelopmentBootstrap
     {
         CardadoGameManager manager = Object.FindFirstObjectByType<CardadoGameManager>();
         if (manager == null) return;
+
         CardadoCardActionDevelopmentOverlay legacy = manager.GetComponent<CardadoCardActionDevelopmentOverlay>();
         if (legacy != null) Object.Destroy(legacy);
+
         if (manager.GetComponent<CardadoCardActionDevelopmentOverlayV2>() == null)
             manager.gameObject.AddComponent<CardadoCardActionDevelopmentOverlayV2>();
+
+        if (manager.GetComponent<CardadoCollectorDevelopmentFix>() == null)
+            manager.gameObject.AddComponent<CardadoCollectorDevelopmentFix>();
     }
 }
