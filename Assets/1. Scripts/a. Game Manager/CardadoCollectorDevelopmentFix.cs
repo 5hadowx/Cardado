@@ -25,7 +25,6 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
     MethodInfo cancelEffectMethod;
     MethodInfo effectTextMethod;
 
-    bool suppressOriginal;
     bool selectedFromCollector;
     CardInstance selectedStolenCard;
     readonly List<CardInstance> stolenSnapshot = new List<CardInstance>();
@@ -58,33 +57,28 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         if (gm == null || overlay == null || stepField == null || visibleField == null) return;
 
         string step = GetStepName();
-        suppressOriginal = false;
 
         if (step == "SpecialCollectorPlay")
         {
             CaptureCollectorPool();
-            suppressOriginal = true;
             SetOverlayVisible(false);
             return;
         }
 
         if (selectedFromCollector && step == "SpecialExecutionerTarget")
         {
-            suppressOriginal = true;
             SetOverlayVisible(false);
             return;
         }
 
         if (selectedFromCollector && step == "ExecutionerTarget")
         {
-            suppressOriginal = true;
             SetOverlayVisible(false);
             return;
         }
 
         if (selectedFromCollector && step == "ExecutionerEffects")
         {
-            suppressOriginal = true;
             SetOverlayVisible(false);
             return;
         }
