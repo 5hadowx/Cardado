@@ -1,11 +1,12 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
 using UnityEngine;
 
 /// <summary>
 /// Development-only fixes for cards stolen by Special Collector.
-/// Keeps a stolen card selection reversible until the stolen card effect is actually used.
+/// Keeps stolen-card selection reversible until the stolen card effect is actually committed.
 /// Also adds hand-card counts to Executioner target screens.
 /// </summary>
 [DefaultExecutionOrder(-900)]
@@ -18,14 +19,18 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
     FieldInfo visibleField;
     FieldInfo activeField;
     FieldInfo collectorPoolField;
+    FieldInfo execEffectsField;
     MethodInfo routeStolenMethod;
     MethodInfo targetMethod;
+    MethodInfo cancelEffectMethod;
+    MethodInfo effectTextMethod;
 
+    bool suppressOriginal;
     bool selectedFromCollector;
     CardInstance selectedStolenCard;
     readonly List<CardInstance> stolenSnapshot = new List<CardInstance>();
 
-    GUIStyle box, title, button;
+    GUIStyle box, title, button, small;
 
     void Awake()
     {
@@ -41,8 +46,11 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         visibleField = t.GetField("visible", BindingFlags.Instance | BindingFlags.NonPublic);
         activeField = t.GetField("active", BindingFlags.Instance | BindingFlags.NonPublic);
         collectorPoolField = t.GetField("collectorPool", BindingFlags.Instance | BindingFlags.NonPublic);
+        execEffectsField = t.GetField("execEffects", BindingFlags.Instance | BindingFlags.NonPublic);
         routeStolenMethod = t.GetMethod("RouteStolen", BindingFlags.Instance | BindingFlags.NonPublic);
         targetMethod = t.GetMethod("Target", BindingFlags.Instance | BindingFlags.NonPublic);
+        cancelEffectMethod = t.GetMethod("CancelEffect", BindingFlags.Instance | BindingFlags.NonPublic);
+        effectTextMethod = t.GetMethod("EffectText", BindingFlags.Instance | BindingFlags.NonPublic);
     }
 
     void Update()
@@ -50,21 +58,60 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         if (gm == null || overlay == null || stepField == null || visibleField == null) return;
 
         string step = GetStepName();
+        suppressOriginal = false;
 
+        // The original overlay must not draw its collector-card screen because it
+        // assumes the stolen cards are normal hand cards. We own this screen instead.
         if (step == "SpecialCollectorPlay")
         {
             CaptureCollectorPool();
+            suppressOriginal = true;
             SetOverlayVisible(false);
+            return;
         }
-        else if (step == "SpecialExecutionerTarget" && selectedFromCollector)
+
+        // A stolen Special Executioner has its own effect: discard the target's
+        // entire hand. A stolen regular Executioner must use the normal Executioner
+        // rules instead, so only the special step gets the discard-hand UI.
+        if (selectedFromCollector && step == "SpecialExecutionerTarget")
         {
+            suppressOriginal = true;
             SetOverlayVisible(false);
+            return;
         }
-        else if (step == "ExecutionerTarget")
+
+        // A stolen regular Executioner uses the normal two-purpose Executioner flow,
+        // but its BACK path must return to the stolen-card list rather than the hand.
+        if (selectedFromCollector && step == "ExecutionerTarget")
         {
+            suppressOriginal = true;
             SetOverlayVisible(false);
+            return;
         }
-        else if (selectedFromCollector && step != "SpecialExecutionerTarget")
+
+        // When several permanent effects exist, the original overlay enters
+        // ExecutionerEffects. Keep ownership of that screen while the card came
+        // from Collector so BACK can still return to the correct stolen-card state.
+        if (selectedFromCollector && step == "ExecutionerEffects")
+        {
+            suppressOriginal = true;
+            SetOverlayVisible(false);
+            return;
+        }
+
+        // Once the underlying overlay reaches None, its After()/Commit() path has
+        // actually resolved the stolen card. Only now discard the other stolen cards.
+        if (selectedFromCollector && step == "None")
+        {
+            DiscardUnselectedStolenCards();
+            selectedFromCollector = false;
+            selectedStolenCard = null;
+            stolenSnapshot.Clear();
+            return;
+        }
+
+        // Any other transition means the stolen-card flow has finished or was reset.
+        if (selectedFromCollector)
         {
             selectedFromCollector = false;
             selectedStolenCard = null;
@@ -84,20 +131,30 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
             return;
         }
 
-        if (step == "SpecialExecutionerTarget" && selectedFromCollector)
+        if (selectedFromCollector && step == "SpecialExecutionerTarget")
         {
             DrawExecutionerTarget(true);
             return;
         }
 
-        if (step == "ExecutionerTarget")
+        if (selectedFromCollector && step == "ExecutionerTarget")
+        {
             DrawExecutionerTarget(false);
+            return;
+        }
+
+        if (selectedFromCollector && step == "ExecutionerEffects")
+        {
+            DrawExecutionerEffects();
+            return;
+        }
     }
 
     void CaptureCollectorPool()
     {
         if (collectorPoolField == null) return;
-        var pool = collectorPoolField.GetValue(overlay) as List<CardInstance>;
+        object raw = collectorPoolField.GetValue(overlay);
+        var pool = raw as List<CardInstance>;
         if (pool == null) return;
 
         if (stolenSnapshot.Count == 0 || !SamePool(pool, stolenSnapshot))
@@ -119,7 +176,7 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         Rect r = Box(900, 430);
         GUI.Box(r, "", box);
         GUI.Label(new Rect(r.x + 20, r.y + 20, 860, 45), "SPECIAL COLLECTOR — CHOOSE CARD TO PLAY", title);
-        GUI.Label(new Rect(r.x + 20, r.y + 70, 860, 30), "You may go back until the stolen card effect is actually used.", GUI.skin.label);
+        GUI.Label(new Rect(r.x + 20, r.y + 70, 860, 30), "You may go back until the stolen card effect is actually committed.", GUI.skin.label);
 
         for (int i = 0; i < stolenSnapshot.Count; i++)
         {
@@ -134,6 +191,7 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         {
             selectedFromCollector = false;
             selectedStolenCard = null;
+            stolenSnapshot.Clear();
             SetOverlayStep("SpecialCollectorTake");
             SetOverlayVisible(true);
         }
@@ -150,62 +208,106 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         SetOverlayActive(c);
         SetOverlayVisible(true);
 
-        // Route the stolen card without calling PlayCollector(). That method clears the
-        // stolen-card pool immediately, which made Back impossible. Unselected cards stay
-        // in the pool until the chosen stolen-card effect is actually used.
+        // Do not call PlayCollector(): it clears collectorPool immediately.
+        // RouteStolen only chooses the appropriate effect state.
         if (routeStolenMethod != null)
             routeStolenMethod.Invoke(overlay, new object[] { c });
     }
 
-    void DrawExecutionerTarget(bool stolen)
+    void DrawExecutionerTarget(bool special)
     {
-        Rect r = Box(900, 420);
+        Rect r = Box(920, 450);
         GUI.Box(r, "", box);
-        string head = stolen ? "SPECIAL EXECUTIONER — CHOOSE OPPONENT" : "EXECUTIONER — CHOOSE OPPONENT";
-        GUI.Label(new Rect(r.x + 20, r.y + 20, 860, 45), head, title);
-        GUI.Label(new Rect(r.x + 20, r.y + 70, 860, 35),
-            "Choose a player to discard their entire hand. Card count is shown for each player.", GUI.skin.label);
+
+        string head = special
+            ? "SPECIAL EXECUTIONER — CHOOSE OPPONENT"
+            : "EXECUTIONER — CHOOSE TARGET";
+        GUI.Label(new Rect(r.x + 20, r.y + 20, 880, 45), head, title);
+
+        string help = special
+            ? "Choose a player. Their entire hand will be discarded."
+            : "Choose a player to block this turn, or target a player who already played to cancel their permanent effect.";
+        GUI.Label(new Rect(r.x + 20, r.y + 70, 880, 45), help, GUI.skin.label);
 
         float x = r.x + 25;
         for (int p = 0; p < gm.Players.Count; p++)
         {
             if (p == gm.CurrentHandPlayerIndex) continue;
-            string label = gm.Players[p].playerId + "\nCards: " + gm.Players[p].hand.cardsInHand.Count + "\nChips: " + gm.Players[p].chips;
-            if (GUI.Button(new Rect(x, r.y + 135, 160, 100), label, button))
+
+            string label = gm.Players[p].playerId
+                + "\nCards: " + gm.Players[p].hand.cardsInHand.Count
+                + "\nChips: " + gm.Players[p].chips;
+
+            GUI.enabled = special || CanBeRegularExecutionerTarget(p);
+            if (GUI.Button(new Rect(x, r.y + 140, 175, 115), label, button))
             {
-                if (stolen) DiscardUnselectedStolenCards();
-                selectedFromCollector = false;
-                selectedStolenCard = null;
-                stolenSnapshot.Clear();
+                // Do not discard the other stolen cards yet. The target selection
+                // can still lead to the regular ExecutionerEffects screen, where
+                // the player may press BACK.
                 InvokeTarget(p);
             }
-            x += 175;
+            GUI.enabled = true;
+            x += 190;
         }
 
-        if (GUI.Button(new Rect(r.x + 25, r.y + 320, 850, 55), "BACK", button))
+        if (GUI.Button(new Rect(r.x + 25, r.y + 335, 870, 55), "BACK", button))
         {
-            if (stolen)
-            {
-                RestoreCollectorPool();
-                SetOverlayStep("SpecialCollectorPlay");
-                SetOverlayVisible(true);
-            }
-            else
-            {
-                SetOverlayStep("Cards");
-                SetOverlayVisible(true);
-            }
+            RestoreCollectorPool();
+            SetOverlayStep("SpecialCollectorPlay");
+            SetOverlayVisible(true);
         }
     }
 
-    void DiscardUnselectedStolenCards()
+    bool CanBeRegularExecutionerTarget(int p)
     {
-        for (int i = 0; i < stolenSnapshot.Count; i++)
+        // Preserve the normal Executioner semantics: a player who has not yet
+        // played can be blocked. A player who already played is still a valid
+        // target only when they have a permanent effect that can be cancelled.
+        // The underlying Executioner() method remains authoritative for the exact
+        // resolution; this check only prevents selecting the current player.
+        return p >= 0 && p < gm.Players.Count && p != gm.CurrentHandPlayerIndex;
+    }
+
+    void DrawExecutionerEffects()
+    {
+        Rect r = Box(900, 430);
+        GUI.Box(r, "", box);
+        GUI.Label(new Rect(r.x + 20, r.y + 20, 860, 45), "EXECUTIONER — CANCEL PERMANENT EFFECT", title);
+        GUI.Label(new Rect(r.x + 20, r.y + 70, 860, 35),
+            "Choose an already played permanent effect to cancel.", GUI.skin.label);
+
+        IList list = execEffectsField == null ? null : execEffectsField.GetValue(overlay) as IList;
+        int count = list == null ? 0 : list.Count;
+
+        for (int i = 0; i < count; i++)
         {
-            CardInstance c = stolenSnapshot[i];
-            if (c == null || c == selectedStolenCard) continue;
-            gm.DiscardResolvedCard(c);
+            object effect = list[i];
+            string label = EffectDisplayText(effect);
+            if (GUI.Button(new Rect(r.x + 25, r.y + 120 + i * 70, 850, 55), label, button))
+            {
+                if (cancelEffectMethod != null)
+                    cancelEffectMethod.Invoke(overlay, new object[] { effect });
+            }
         }
+
+        if (count == 0)
+            GUI.Label(new Rect(r.x + 25, r.y + 120, 850, 35), "No cancelable permanent effect.", GUI.skin.label);
+
+        if (GUI.Button(new Rect(r.x + 25, r.y + 330, 850, 55), "BACK", button))
+        {
+            SetOverlayStep("ExecutionerTarget");
+            SetOverlayVisible(true);
+        }
+    }
+
+    string EffectDisplayText(object effect)
+    {
+        if (effectTextMethod != null && effect != null)
+        {
+            object result = effectTextMethod.Invoke(overlay, new[] { effect });
+            if (result is string text && !string.IsNullOrEmpty(text)) return text;
+        }
+        return "Permanent effect";
     }
 
     void RestoreCollectorPool()
@@ -216,8 +318,16 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         pool.Clear();
         pool.AddRange(stolenSnapshot);
         SetOverlayActive(null);
-        selectedFromCollector = false;
-        selectedStolenCard = null;
+    }
+
+    void DiscardUnselectedStolenCards()
+    {
+        for (int i = 0; i < stolenSnapshot.Count; i++)
+        {
+            CardInstance c = stolenSnapshot[i];
+            if (c == null || c == selectedStolenCard) continue;
+            gm.DiscardResolvedCard(c);
+        }
     }
 
     void InvokeTarget(int playerIndex)
@@ -256,5 +366,6 @@ public class CardadoCollectorDevelopmentFix : MonoBehaviour
         box = new GUIStyle(GUI.skin.box) { padding = new RectOffset(20, 20, 20, 20) };
         title = new GUIStyle(GUI.skin.label) { fontSize = 22, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         button = new GUIStyle(GUI.skin.button) { fontSize = 17, fontStyle = FontStyle.Bold };
+        small = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
     }
 }
