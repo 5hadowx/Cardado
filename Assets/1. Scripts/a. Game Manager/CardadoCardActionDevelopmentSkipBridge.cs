@@ -13,6 +13,14 @@ using UnityEngine;
 [DefaultExecutionOrder(10000)]
 public sealed class CardadoCardActionDevelopmentSkipBridge : MonoBehaviour
 {
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    static void Install()
+    {
+        CardadoGameManager manager = FindFirstObjectByType<CardadoGameManager>();
+        if (manager != null && manager.GetComponent<CardadoCardActionDevelopmentSkipBridge>() == null)
+            manager.gameObject.AddComponent<CardadoCardActionDevelopmentSkipBridge>();
+    }
+
     CardadoGameManager gm;
     Component overlay;
     FieldInfo stepField;
