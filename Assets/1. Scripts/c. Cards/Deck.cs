@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
 public class Deck
 {
@@ -14,6 +15,8 @@ public class Deck
             if (def != null)
                 drawPile.Add(new CardInstance(def));
         }
+
+        Debug.Log($"[Cardado] Deck initialized: {drawPile.Count} cards in draw pile.");
     }
 
     public void Shuffle()
@@ -26,7 +29,10 @@ public class Deck
         RecycleDiscardIfNeeded();
 
         if (drawPile.Count == 0)
+        {
+            Debug.LogWarning("[Cardado] Deck draw failed: no cards available in draw or discard pile.");
             return null;
+        }
 
         var card = drawPile[0];
         drawPile.RemoveAt(0);
@@ -48,9 +54,11 @@ public class Deck
         if (drawPile.Count > 0 || discardPile.Count == 0)
             return;
 
+        int recycledCount = discardPile.Count;
         drawPile.AddRange(discardPile);
         discardPile.Clear();
         Shuffle();
+        Debug.Log($"[Cardado] Deck recycled discard pile: {recycledCount} cards shuffled back into draw pile.");
     }
 
     private void ShuffleList(List<CardInstance> list)
