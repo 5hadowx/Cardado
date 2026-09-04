@@ -1,7 +1,7 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// Rules used only to determine whether a three-card hand may declare War.
+/// Rules used only to determine whether a player's current cards allow a War declaration.
 /// Once War starts, the cards use the normal Cardado card effects.
 /// </summary>
 public static class CardadoWarCardRules
@@ -21,9 +21,33 @@ public static class CardadoWarCardRules
                 card.data.cardType == CardType.Executioner);
     }
 
+    public static bool IsRoyalty(CardInstance card)
+    {
+        if (card == null || card.data == null)
+            return false;
+
+        return card.data.cardType == CardType.King ||
+               card.data.cardType == CardType.Queen ||
+               card.data.cardType == CardType.GordonRobleys;
+    }
+
     public static bool HasValidClaim(List<CardInstance> cards)
     {
-        if (cards == null || cards.Count != 3)
+        if (cards == null || cards.Count == 0)
+            return false;
+
+        for (int i = 0; i < cards.Count; i++)
+        {
+            if (cards[i] == null || cards[i].data == null)
+                continue;
+
+            // King / Queen / Gordon Robleys are standalone War claims.
+            if (IsRoyalty(cards[i]))
+                return true;
+        }
+
+        // The remaining declaration patterns require three cards.
+        if (cards.Count != 3)
             return false;
 
         for (int i = 0; i < cards.Count; i++)
@@ -32,17 +56,13 @@ public static class CardadoWarCardRules
                 return false;
         }
 
-        // Standalone King / Queen / Gordon Robleys claims.
-        for (int i = 0; i < cards.Count; i++)
-        {
-            CardType type = cards[i].data.cardType;
-            if (type == CardType.King || type == CardType.Queen || type == CardType.GordonRobleys)
-                return true;
-        }
-
         // Mirror / Executioner are black wildcards.
-        if (IsBlackWildcard(cards[0]) || IsBlackWildcard(cards[1]) || IsBlackWildcard(cards[2]))
+        if (IsBlackWildcard(cards[0]) ||
+            IsBlackWildcard(cards[1]) ||
+            IsBlackWildcard(cards[2]))
+        {
             return IsValidThreeCardCombination(cards);
+        }
 
         // Special + matching normal card = three-card equivalent.
         for (int i = 0; i < cards.Count; i++)
@@ -51,18 +71,23 @@ public static class CardadoWarCardRules
             {
                 CardInstance a = cards[i];
                 CardInstance b = cards[j];
-                if (a.data.rarity == CardRarity.Special && b.data.rarity != CardRarity.Special &&
+
+                if (a.data.rarity == CardRarity.Special &&
+                    b.data.rarity != CardRarity.Special &&
+                    !IsBlackWildcard(b) &&
                     a.data.cardType == b.data.cardType)
                     return true;
-                if (b.data.rarity == CardRarity.Special && a.data.rarity != CardRarity.Special &&
+
+                if (b.data.rarity == CardRarity.Special &&
+                    a.data.rarity != CardRarity.Special &&
+                    !IsBlackWildcard(a) &&
                     b.data.cardType == a.data.cardType)
                     return true;
             }
         }
 
-        // Three matching symbols / three different symbols. The current CardData
-        // model does not expose a separate symbol field, so card type is the
-        // available grouping key for this declaration check.
+        // The current CardData model has no separate symbol field, so card type
+        // is the available grouping key for the matching/different-symbol test.
         bool allSame = cards[0].data.cardType == cards[1].data.cardType &&
                        cards[0].data.cardType == cards[2].data.cardType;
         if (allSame)
@@ -112,8 +137,7 @@ public static class CardadoWarCardRules
         if (allNonWildcardsSame)
             return true;
 
-        // With two non-wild cards of different groups, the wildcard can complete
-        // the three-different-symbol pattern.
+        // Two non-wild cards of different groups can be completed by the wildcard.
         return nonWildcardCount == 2;
     }
 }
