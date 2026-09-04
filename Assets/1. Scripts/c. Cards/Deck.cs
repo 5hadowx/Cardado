@@ -41,6 +41,7 @@ public class Deck
 
     public int Count => drawPile.Count;
     public int DiscardCount => discardPile.Count;
+    public int AvailableCount => drawPile.Count + discardPile.Count;
 
     private void RecycleDiscardIfNeeded()
     {
