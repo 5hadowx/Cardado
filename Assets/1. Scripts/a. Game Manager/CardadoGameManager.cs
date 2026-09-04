@@ -171,6 +171,11 @@ public class CardadoGameManager : MonoBehaviour
     public bool TrySkipCardAction(int playerIndex)
     {
         ValidatePlayerIndex(playerIndex);
+        if (Phase == CardadoGamePhase.WarResolution)
+        {
+            CardadoWarManager war = FindFirstObjectByType<CardadoWarManager>();
+            return war != null && war.TrySkipCardAction(playerIndex);
+        }
         if (Phase != CardadoGamePhase.CardActionDecision || playerIndex != CurrentHandPlayerIndex || PendingCardActionCard != null) return false;
         BeginDieSelectionForCurrentPlayer();
         return true;
@@ -224,6 +229,11 @@ public class CardadoGameManager : MonoBehaviour
     public bool IsDieAvailable(int playerIndex, int dieIndex)
     {
         ValidatePlayerIndex(playerIndex);
+        if (Phase == CardadoGamePhase.WarResolution)
+        {
+            CardadoWarManager war = FindFirstObjectByType<CardadoWarManager>();
+            return war != null && war.IsWarDieAvailable(playerIndex, dieIndex);
+        }
         CardadoPlayerState player = players[playerIndex];
         if (dieIndex < 0 || dieIndex >= player.dice.Count) return false;
         if (Phase == CardadoGamePhase.CardActionDecision) return player.dice[dieIndex] > 0;
@@ -233,8 +243,28 @@ public class CardadoGameManager : MonoBehaviour
     public bool IsDieTargetable(int playerIndex, int dieIndex)
     {
         ValidatePlayerIndex(playerIndex);
+        if (Phase == CardadoGamePhase.WarResolution)
+        {
+            CardadoWarManager war = FindFirstObjectByType<CardadoWarManager>();
+            return war != null && war.IsWarDieTargetable(playerIndex, dieIndex);
+        }
         CardadoPlayerState player = players[playerIndex];
         return dieIndex >= 0 && dieIndex < player.dice.Count && player.dice[dieIndex] > 0;
+    }
+
+    public void NotifyWarHandTurnStarted(CardadoPlayerState player, int handNumber, int starterIndex)
+    {
+        HandTurnStarted?.Invoke(player, handNumber, starterIndex);
+    }
+
+    public void RequestWarCardAction(CardadoPlayerState player, CardadoCardActionRequestType requestType)
+    {
+        CardActionRequested?.Invoke(player, requestType);
+    }
+
+    public void NotifyWarDiePlayed(CardadoPlayerState player, int dieIndex, int dieValue)
+    {
+        DiePlayed?.Invoke(player, dieIndex, dieValue);
     }
 
     public void SetNextHandStarter(int winnerPlayerIndex)
@@ -253,6 +283,11 @@ public class CardadoGameManager : MonoBehaviour
     public bool TryPlayDie(int playerIndex, int dieIndex)
     {
         ValidatePlayerIndex(playerIndex);
+        if (Phase == CardadoGamePhase.WarResolution)
+        {
+            CardadoWarManager war = FindFirstObjectByType<CardadoWarManager>();
+            return war != null && war.TryPlayWarDieForPlayer(playerIndex, dieIndex);
+        }
         if (Phase != CardadoGamePhase.PlayingHands || playerIndex != CurrentHandPlayerIndex) return false;
         CardadoPlayerState player = players[playerIndex];
         if (!IsDieAvailable(playerIndex, dieIndex)) return false;
@@ -297,6 +332,7 @@ public class CardadoGameManager : MonoBehaviour
         if (winnersAtTarget.Count == 1) { MatchWinnerIndex = winnersAtTarget[0]; MatchWon?.Invoke(MatchWinnerIndex); SetPhase(CardadoGamePhase.GameOver); return; }
         if (winnersAtTarget.Count > 1) { MatchWinnerIndex = -1; SetPhase(CardadoGamePhase.GameOver); return; }
         MatchWinnerIndex = -1;
+        DiscardAllHandsToDeck();
         SetDealer(GetNextPlayerIndex(DealerPlayerIndex));
     }
 
@@ -364,14 +400,27 @@ public class CardadoGameManager : MonoBehaviour
         if (RoundDeck == null) InitializeDeck();
         foreach (var player in players)
         {
+            List<CardInstance> oldCards = new List<CardInstance>(player.hand.cardsInHand);
             player.hand.cardsInHand.Clear();
+            foreach (CardInstance oldCard in oldCards) DiscardResolvedCard(oldCard);
             for (int i = 0; i < RoundCardCount; i++)
             {
                 CardInstance card = RoundDeck.Draw();
                 if (card == null) throw new InvalidOperationException("No cards are available to complete the round deal.");
+                card.isPlayed = false;
                 player.hand.AddCard(card);
             }
             PlayerHandDealt?.Invoke(player);
+        }
+    }
+
+    private void DiscardAllHandsToDeck()
+    {
+        foreach (var player in players)
+        {
+            List<CardInstance> cards = new List<CardInstance>(player.hand.cardsInHand);
+            player.hand.cardsInHand.Clear();
+            foreach (CardInstance card in cards) DiscardResolvedCard(card);
         }
     }
 
