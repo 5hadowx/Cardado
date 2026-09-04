@@ -4,12 +4,10 @@ using System.Reflection;
 using UnityEngine;
 
 /// <summary>
-/// War phase controller.
-///
-/// War claims use CardadoWarCardRules, but once a war starts the cards are
-/// ordinary Cardado cards. Three cards are dealt to each participant from the
-/// existing RoundDeck and the normal card-action development overlay is used
-/// to resolve their effects.
+/// War phase controller. War declaration consumes only the optimal claim cards;
+/// all other cards remain with their owner and survive the War. Each player may
+/// declare multiple wars in sequence while they remain eligible and have chips.
+/// Once a War starts, its three cards per player use the normal card-effect flow.
 /// </summary>
 public class CardadoWarManager : MonoBehaviour
 {
@@ -21,8 +19,6 @@ public class CardadoWarManager : MonoBehaviour
     [SerializeField, Min(1)] private int warDiceCount = 3;
 
     private readonly List<int> claimOrder = new List<int>();
-    private readonly HashSet<int> claimedPlayers = new HashSet<int>();
-
     private WarUiStep uiStep;
     private int currentClaimPosition;
     private int challengerIndex = -1;
@@ -41,6 +37,11 @@ public class CardadoWarManager : MonoBehaviour
     private bool warCardActionPending;
     private bool warCardPlayedThisTurn;
     private readonly List<CardInstance> turnStartingCards = new List<CardInstance>();
+
+    // Cards held before a War starts. The claim cards are consumed, but every
+    // other pre-War card must be restored after the War.
+    private readonly List<CardInstance> preservedChallengerCards = new List<CardInstance>();
+    private readonly List<CardInstance> preservedTargetCards = new List<CardInstance>();
 
     private GUIStyle panelStyle;
     private GUIStyle titleStyle;
@@ -99,7 +100,6 @@ public class CardadoWarManager : MonoBehaviour
             return;
 
         claimOrder.Clear();
-        claimedPlayers.Clear();
         challengerIndex = -1;
         targetIndex = -1;
         warWager = 0;
@@ -108,6 +108,8 @@ public class CardadoWarManager : MonoBehaviour
         warCardActionPending = false;
         warCardPlayedThisTurn = false;
         turnStartingCards.Clear();
+        preservedChallengerCards.Clear();
+        preservedTargetCards.Clear();
         uiStep = WarUiStep.Claim;
 
         int start = gameManager.StartingPlayerIndex;
@@ -148,11 +150,12 @@ public class CardadoWarManager : MonoBehaviour
             int playerIndex = claimOrder[currentClaimPosition];
             if (CanClaimWar(playerIndex))
             {
-                Debug.Log($"[Cardado] WAR CLAIM TURN: {gameManager.Players[playerIndex].playerId}.");
+                Debug.Log($"[Cardado] WAR CLAIM TURN: {gameManager.Players[playerIndex].playerId}. " +
+                          $"Optimal claim: {DescribeOptimalClaim(playerIndex)}.");
                 return;
             }
 
-            Debug.Log($"[Cardado] WAR PASS: {gameManager.Players[playerIndex].playerId} has no valid war claim or cannot afford the minimum wager.");
+            Debug.Log($"[Cardado] WAR PASS: {gameManager.Players[playerIndex].playerId} has no valid war claim or cannot afford another war.");
             currentClaimPosition++;
         }
 
@@ -164,11 +167,28 @@ public class CardadoWarManager : MonoBehaviour
     {
         if (gameManager == null || playerIndex < 0 || playerIndex >= gameManager.Players.Count)
             return false;
-        if (claimedPlayers.Contains(playerIndex))
+        if (gameManager.Players[playerIndex].chips <= 0)
             return false;
-        if (gameManager.Players[playerIndex].chips < 1)
-            return false;
-        return CardadoWarCardRules.HasValidClaim(gameManager.Players[playerIndex].hand.cardsInHand);
+        return CardadoWarCardRules.FindOptimalClaim(gameManager.Players[playerIndex].hand.cardsInHand) != null;
+    }
+
+    private string DescribeOptimalClaim(int playerIndex)
+    {
+        List<CardInstance> claim = CardadoWarCardRules.FindOptimalClaim(gameManager.Players[playerIndex].hand.cardsInHand);
+        if (claim == null)
+            return "none";
+
+        List<string> names = new List<string>();
+        foreach (CardInstance card in claim)
+            names.Add(GetCardLabel(card));
+        return string.Join(" + ", names);
+    }
+
+    private string GetCardLabel(CardInstance card)
+    {
+        if (card == null || card.data == null)
+            return "?";
+        return card.data.id + " [" + card.data.cardType + ", " + card.data.rarity + "]";
     }
 
     public bool TryClaimWar(int playerIndex)
@@ -178,10 +198,32 @@ public class CardadoWarManager : MonoBehaviour
         if (playerIndex != claimOrder[currentClaimPosition] || !CanClaimWar(playerIndex))
             return false;
 
+        List<CardInstance> optimalClaim = CardadoWarCardRules.FindOptimalClaim(gameManager.Players[playerIndex].hand.cardsInHand);
+        if (optimalClaim == null || optimalClaim.Count == 0)
+            return false;
+
+        // Consume only the cards used for this declaration. Every other card stays in hand.
+        foreach (CardInstance card in optimalClaim)
+        {
+            if (!gameManager.Players[playerIndex].hand.cardsInHand.Remove(card))
+                return false;
+            card.isPlayed = true;
+            gameManager.DiscardResolvedCard(card);
+        }
+
         challengerIndex = playerIndex;
         uiStep = WarUiStep.Target;
-        Debug.Log($"[Cardado] WAR CLAIMED: {gameManager.Players[playerIndex].playerId}.");
+        Debug.Log($"[Cardado] WAR CLAIMED: {gameManager.Players[playerIndex].playerId} using {DescribeClaim(optimalClaim)}. " +
+                  $"Remaining cards: {gameManager.Players[playerIndex].hand.cardsInHand.Count}.");
         return true;
+    }
+
+    private string DescribeClaim(List<CardInstance> claim)
+    {
+        List<string> labels = new List<string>();
+        foreach (CardInstance card in claim)
+            labels.Add(GetCardLabel(card));
+        return string.Join(" + ", labels);
     }
 
     public bool TryPassWar(int playerIndex)
@@ -203,7 +245,6 @@ public class CardadoWarManager : MonoBehaviour
             return false;
         if (playerIndex < 0 || playerIndex >= gameManager.Players.Count || playerIndex == challengerIndex)
             return false;
-
         targetIndex = playerIndex;
         uiStep = WarUiStep.Wager;
         return true;
@@ -217,7 +258,6 @@ public class CardadoWarManager : MonoBehaviour
             return false;
         if (gameManager.Players[challengerIndex].chips < wager || gameManager.Players[targetIndex].chips < wager)
             return false;
-
         warWager = wager;
         uiStep = WarUiStep.Order;
         return true;
@@ -227,7 +267,6 @@ public class CardadoWarManager : MonoBehaviour
     {
         if (uiStep != WarUiStep.Order || challengerIndex < 0 || targetIndex < 0)
             return false;
-
         challengerPlaysFirst = challengerFirst;
         StartWar();
         return true;
@@ -249,36 +288,50 @@ public class CardadoWarManager : MonoBehaviour
         warCardActionPending = false;
         warCardPlayedThisTurn = false;
 
-        PrepareWarParticipant(challengerIndex);
-        PrepareWarParticipant(targetIndex);
+        PreserveAndClearWarHands(challengerIndex, preservedChallengerCards);
+        PreserveAndClearWarHands(targetIndex, preservedTargetCards);
 
         DealWarCards(challengerIndex, warCardCount);
         DealWarCards(targetIndex, warCardCount);
-
         RollWarDice(challengerIndex, warDiceCount);
         RollWarDice(targetIndex, warDiceCount);
 
         uiStep = WarUiStep.Playing;
-
         Debug.Log($"[Cardado] WAR START: {gameManager.Players[challengerIndex].playerId} vs {gameManager.Players[targetIndex].playerId}. " +
                   $"Challenger plays {(challengerPlaysFirst ? "first" : "second")}.");
         Debug.Log("[Cardado] WAR CARDS: 3 vs 3 from the existing RoundDeck.");
-        Debug.Log($"[Cardado] WAR DICE — {gameManager.Players[challengerIndex].playerId}: {string.Join(", ", gameManager.Players[challengerIndex].dice)}");
-        Debug.Log($"[Cardado] WAR DICE — {gameManager.Players[targetIndex].playerId}: {string.Join(", ", gameManager.Players[targetIndex].dice)}");
-
         BeginWarHand();
     }
 
-    private void PrepareWarParticipant(int playerIndex)
+    private void PreserveAndClearWarHands(int playerIndex, List<CardInstance> preserved)
     {
+        preserved.Clear();
         CardadoPlayerState player = gameManager.Players[playerIndex];
-        List<CardInstance> oldCards = new List<CardInstance>(player.hand.cardsInHand);
+        preserved.AddRange(player.hand.cardsInHand);
         player.hand.cardsInHand.Clear();
-        foreach (CardInstance card in oldCards)
-            gameManager.DiscardResolvedCard(card);
-
         player.dice.Clear();
         player.playedDice.Clear();
+    }
+
+    private void RestorePreservedWarCards()
+    {
+        RestorePlayerCards(challengerIndex, preservedChallengerCards);
+        RestorePlayerCards(targetIndex, preservedTargetCards);
+        preservedChallengerCards.Clear();
+        preservedTargetCards.Clear();
+    }
+
+    private void RestorePlayerCards(int playerIndex, List<CardInstance> cards)
+    {
+        if (playerIndex < 0 || playerIndex >= gameManager.Players.Count)
+            return;
+        CardadoPlayerState player = gameManager.Players[playerIndex];
+        foreach (CardInstance card in cards)
+        {
+            if (card == null) continue;
+            card.isPlayed = false;
+            player.hand.AddCard(card);
+        }
     }
 
     private void DealWarCards(int playerIndex, int count)
@@ -323,15 +376,10 @@ public class CardadoWarManager : MonoBehaviour
 
         gameManager.NotifyWarHandTurnStarted(current, currentHandNumber, GetCurrentWarPlayerIndex());
         turnStartingCards.AddRange(current.hand.cardsInHand);
-
         if (current.hand.cardsInHand.Count > 0)
         {
             warCardActionPending = true;
             gameManager.RequestWarCardAction(current, CardadoCardActionRequestType.ChooseCard);
-        }
-        else
-        {
-            Debug.Log($"[Cardado] WAR HAND {currentHandNumber}: {current.playerId} has no card and goes directly to the die.");
         }
     }
 
@@ -339,7 +387,6 @@ public class CardadoWarManager : MonoBehaviour
     {
         if (!WarInProgress || uiStep != WarUiStep.Playing || playerIndex != GetCurrentWarPlayerIndex())
             return false;
-
         warCardPlayedThisTurn = HasWarCardBeenPlayedThisTurn();
         warCardActionPending = false;
         if (warCardPlayedThisTurn)
@@ -350,10 +397,8 @@ public class CardadoWarManager : MonoBehaviour
     private bool HasWarCardBeenPlayedThisTurn()
     {
         for (int i = 0; i < turnStartingCards.Count; i++)
-        {
             if (turnStartingCards[i] != null && turnStartingCards[i].isPlayed)
                 return true;
-        }
         return false;
     }
 
@@ -361,9 +406,7 @@ public class CardadoWarManager : MonoBehaviour
     {
         if (!WarInProgress || uiStep != WarUiStep.Playing || warCardActionPending)
             return false;
-        if (playerIndex != GetCurrentWarPlayerIndex())
-            return false;
-        if (!IsWarDieAvailable(playerIndex, dieIndex))
+        if (playerIndex != GetCurrentWarPlayerIndex() || !IsWarDieAvailable(playerIndex, dieIndex))
             return false;
 
         CardadoPlayerState player = gameManager.Players[playerIndex];
@@ -373,7 +416,6 @@ public class CardadoWarManager : MonoBehaviour
         else targetCurrentDieIndex = dieIndex;
         currentHandTurns++;
         warCardActionPending = false;
-
         gameManager.NotifyWarDiePlayed(player, dieIndex, value);
         Debug.Log($"[Cardado] War hand {currentHandNumber}: {player.playerId} played {value}.");
 
@@ -394,8 +436,7 @@ public class CardadoWarManager : MonoBehaviour
             return false;
         CardadoPlayerState player = gameManager.Players[playerIndex];
         return dieIndex >= 0 && dieIndex < player.dice.Count &&
-               dieIndex < player.playedDice.Count && !player.playedDice[dieIndex] &&
-               player.dice[dieIndex] > 0;
+               dieIndex < player.playedDice.Count && !player.playedDice[dieIndex] && player.dice[dieIndex] > 0;
     }
 
     public bool IsWarDieTargetable(int playerIndex, int dieIndex)
@@ -411,13 +452,11 @@ public class CardadoWarManager : MonoBehaviour
         CardadoPlayerState current = GetCurrentWarPlayer();
         if (current == null)
             return;
-
         warCardActionPending = false;
         warCardPlayedThisTurn = false;
         turnStartingCards.Clear();
         gameManager.NotifyWarHandTurnStarted(current, currentHandNumber, GetCurrentWarPlayerIndex());
         turnStartingCards.AddRange(current.hand.cardsInHand);
-
         if (current.hand.cardsInHand.Count > 0)
         {
             warCardActionPending = true;
@@ -429,18 +468,13 @@ public class CardadoWarManager : MonoBehaviour
     {
         int challengerValue = GetCurrentHandDieValue(challengerIndex, challengerCurrentDieIndex);
         int targetValue = GetCurrentHandDieValue(targetIndex, targetCurrentDieIndex);
-
-        if (challengerValue > targetValue)
-            challengerHandsWon++;
-        else if (targetValue > challengerValue)
-            targetHandsWon++;
-        else
-            Debug.Log($"[Cardado] War hand {currentHandNumber} tied at {challengerValue}.");
-
-        Debug.Log($"[Cardado] WAR SCORE: {gameManager.Players[challengerIndex].playerId} {challengerHandsWon} — " +
-                  $"{targetHandsWon} {gameManager.Players[targetIndex].playerId}.");
+        if (challengerValue > targetValue) challengerHandsWon++;
+        else if (targetValue > challengerValue) targetHandsWon++;
+        else Debug.Log($"[Cardado] War hand {currentHandNumber} tied at {challengerValue}.");
 
         CleanupWarHandEffects();
+        Debug.Log($"[Cardado] WAR SCORE: {gameManager.Players[challengerIndex].playerId} {challengerHandsWon} — " +
+                  $"{targetHandsWon} {gameManager.Players[targetIndex].playerId}.");
 
         if (challengerHandsWon >= 2 || targetHandsWon >= 2 || currentHandNumber >= warDiceCount)
         {
@@ -461,16 +495,13 @@ public class CardadoWarManager : MonoBehaviour
         if (playerIndex < 0 || playerIndex >= gameManager.Players.Count)
             return 0;
         CardadoPlayerState player = gameManager.Players[playerIndex];
-        if (dieIndex < 0 || dieIndex >= player.dice.Count)
-            return 0;
-        return player.dice[dieIndex];
+        return dieIndex >= 0 && dieIndex < player.dice.Count ? player.dice[dieIndex] : 0;
     }
 
     private void ResolveWar(int winnerIndex)
     {
         int loserIndex = winnerIndex == challengerIndex ? targetIndex : challengerIndex;
         int transfer = Math.Min(warWager, gameManager.Players[loserIndex].chips);
-
         if (transfer > 0)
         {
             gameManager.Players[loserIndex].chips -= transfer;
@@ -479,7 +510,7 @@ public class CardadoWarManager : MonoBehaviour
 
         ResetDevelopmentOverlayForWarEnd();
         DiscardWarHands();
-        claimedPlayers.Add(challengerIndex);
+        RestorePreservedWarCards();
         warResolved = true;
         warCardActionPending = false;
         uiStep = WarUiStep.Complete;
@@ -491,19 +522,14 @@ public class CardadoWarManager : MonoBehaviour
     private void CleanupWarHandEffects()
     {
         Component overlay = FindFirstObjectByType<CardadoCardActionDevelopmentOverlayV2>();
-        if (overlay == null)
-            return;
-
+        if (overlay == null) return;
         Type type = overlay.GetType();
         BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
         FieldInfo effectsField = type.GetField("effects", flags);
         MethodInfo removeMethod = type.GetMethod("RemoveEffectObj", flags);
-        if (effectsField == null || removeMethod == null)
-            return;
-
+        if (effectsField == null || removeMethod == null) return;
         var effects = effectsField.GetValue(overlay) as System.Collections.IList;
-        if (effects == null)
-            return;
+        if (effects == null) return;
 
         List<object> remove = new List<object>();
         foreach (object effect in effects)
@@ -513,11 +539,9 @@ public class CardadoWarManager : MonoBehaviour
             FieldInfo typeField = effectType.GetField("type", flags);
             FieldInfo keyField = effectType.GetField("key", flags);
             if (typeField == null || keyField == null) continue;
-
             string effectTypeName = typeField.GetValue(effect)?.ToString();
             string key = keyField.GetValue(effect) as string;
             bool removeEffect = effectTypeName == "SpecialBodyguardHand";
-
             if (!removeEffect && !string.IsNullOrEmpty(key))
             {
                 string[] parts = key.Split(':');
@@ -525,14 +549,11 @@ public class CardadoWarManager : MonoBehaviour
                 {
                     bool wasPlayedThisHand = (p == challengerIndex && d == challengerCurrentDieIndex) ||
                                               (p == targetIndex && d == targetCurrentDieIndex);
-                    removeEffect = wasPlayedThisHand &&
-                                   (effectTypeName == "Modifier" || effectTypeName == "BodyguardDie");
+                    removeEffect = wasPlayedThisHand && (effectTypeName == "Modifier" || effectTypeName == "BodyguardDie");
                 }
             }
-
             if (removeEffect) remove.Add(effect);
         }
-
         foreach (object effect in remove)
             removeMethod.Invoke(overlay, new[] { effect, true });
     }
@@ -540,9 +561,7 @@ public class CardadoWarManager : MonoBehaviour
     private void ResetDevelopmentOverlayForWarEnd()
     {
         Component overlay = FindFirstObjectByType<CardadoCardActionDevelopmentOverlayV2>();
-        if (overlay == null)
-            return;
-
+        if (overlay == null) return;
         MethodInfo method = overlay.GetType().GetMethod("RoundEnded", BindingFlags.Instance | BindingFlags.NonPublic);
         method?.Invoke(overlay, null);
     }
@@ -555,14 +574,12 @@ public class CardadoWarManager : MonoBehaviour
 
     private void DiscardPlayerHand(int playerIndex)
     {
-        if (playerIndex < 0 || playerIndex >= gameManager.Players.Count)
-            return;
-
+        if (playerIndex < 0 || playerIndex >= gameManager.Players.Count) return;
         CardadoPlayerState player = gameManager.Players[playerIndex];
         List<CardInstance> cards = new List<CardInstance>(player.hand.cardsInHand);
         player.hand.cardsInHand.Clear();
         foreach (CardInstance card in cards)
-            gameManager.DiscardResolvedCard(card);
+            if (card != null) gameManager.DiscardResolvedCard(card);
     }
 
     private CardadoPlayerState GetCurrentWarPlayer()
@@ -576,9 +593,7 @@ public class CardadoWarManager : MonoBehaviour
     private void ForceDevelopmentOverlayToDieSelection(int playerIndex)
     {
         Component overlay = FindFirstObjectByType<CardadoCardActionDevelopmentOverlayV2>();
-        if (overlay == null)
-            return;
-
+        if (overlay == null) return;
         Type type = overlay.GetType();
         BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
         FieldInfo stepField = type.GetField("step", flags);
@@ -588,10 +603,7 @@ public class CardadoWarManager : MonoBehaviour
         FieldInfo siField = type.GetField("si", flags);
         FieldInfo diField = type.GetField("di", flags);
         FieldInfo activeField = type.GetField("active", flags);
-
-        if (stepField == null || visibleField == null || piField == null)
-            return;
-
+        if (stepField == null || visibleField == null || piField == null) return;
         object dieAfterSkip = Enum.Parse(stepField.FieldType, "DieAfterSkip");
         stepField.SetValue(overlay, dieAfterSkip);
         visibleField.SetValue(overlay, true);
@@ -606,14 +618,11 @@ public class CardadoWarManager : MonoBehaviour
     {
         if (!showTemporaryUi || gameManager == null || gameManager.Phase != CardadoGamePhase.WarResolution)
             return;
-
         EnsureStyles();
-
         const float width = 760f;
         const float height = 500f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
         GUI.Box(panel, GUIContent.none, panelStyle);
-
         switch (uiStep)
         {
             case WarUiStep.Claim: DrawClaimPanel(panel, width); break;
@@ -632,21 +641,17 @@ public class CardadoWarManager : MonoBehaviour
             DrawCompletePanel(panel, width);
             return;
         }
-
         CardadoPlayerState player = gameManager.Players[claimOrder[currentClaimPosition]];
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — DECLARE OR PASS", titleStyle);
         GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
             $"{player.playerId} — your turn to declare a war.", GUI.skin.label);
         GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30),
-            $"Chips: {player.chips}    Valid claim: {CardadoWarCardRules.HasValidClaim(player.hand.cardsInHand)}", GUI.skin.label);
-
+            $"Chips: {player.chips}    Optimal claim: {DescribeOptimalClaim(claimOrder[currentClaimPosition])}", GUI.skin.label);
         if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "DECLARE WAR", buttonStyle))
             TryClaimWar(claimOrder[currentClaimPosition]);
         if (GUI.Button(new Rect(panel.x + 25, panel.y + 230, width - 50, 60), "PASS", buttonStyle))
             TryPassWar(claimOrder[currentClaimPosition]);
-
-        GUI.Label(new Rect(panel.x + 25, panel.y + 320, width - 50, 30),
-            $"War order: {BuildClaimOrderLabel()}", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 320, width - 50, 30), $"War order: {BuildClaimOrderLabel()}", GUI.skin.label);
     }
 
     private void DrawTargetPanel(Rect panel, float width)
@@ -655,7 +660,6 @@ public class CardadoWarManager : MonoBehaviour
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE OPPONENT", titleStyle);
         GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
             $"{challenger.playerId} challenges any opponent. The opponent cannot decline.", GUI.skin.label);
-
         float y = panel.y + 125;
         for (int i = 0; i < gameManager.Players.Count; i++)
         {
@@ -663,8 +667,7 @@ public class CardadoWarManager : MonoBehaviour
             CardadoPlayerState target = gameManager.Players[i];
             bool canBeTarget = target.chips >= 1;
             GUI.enabled = canBeTarget;
-            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55),
-                $"{target.playerId} — {target.chips} chip(s)", buttonStyle))
+            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), $"{target.playerId} — {target.chips} chip(s)", buttonStyle))
                 TryChooseTarget(i);
             GUI.enabled = true;
             y += 65;
@@ -705,21 +708,13 @@ public class CardadoWarManager : MonoBehaviour
         CardadoPlayerState challenger = gameManager.Players[challengerIndex];
         CardadoPlayerState target = gameManager.Players[targetIndex];
         string currentPlayer = GetCurrentWarPlayer()?.playerId ?? "?";
-
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — 3 HANDS", titleStyle);
         GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 30),
             $"{challenger.playerId} {challengerHandsWon} — {targetHandsWon} {target.playerId}", GUI.skin.label);
         GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30),
-            $"Hand {currentHandNumber}: {currentPlayer} {((warCardActionPending) ? "chooses a card." : "plays a die.")}", GUI.skin.label);
-
+            $"Hand {currentHandNumber}: {currentPlayer} {(warCardActionPending ? "chooses a card." : "plays a die.")}", GUI.skin.label);
         DrawWarDice(panel, challengerIndex, challenger.playerId, panel.y + 150);
         DrawWarDice(panel, targetIndex, target.playerId, panel.y + 270);
-
-        if (warCardActionPending)
-        {
-            GUI.Label(new Rect(panel.x + 25, panel.y + 405, width - 50, 30),
-                "Use the card-action panel to play a card or skip.", GUI.skin.label);
-        }
     }
 
     private void DrawWarDice(Rect panel, int playerIndex, string playerName, float y)
@@ -729,11 +724,8 @@ public class CardadoWarManager : MonoBehaviour
         CardadoPlayerState player = gameManager.Players[playerIndex];
         for (int i = 0; i < player.dice.Count; i++)
         {
-            if (!IsWarDieAvailable(playerIndex, i))
-                continue;
-
-            bool enabled = !warCardActionPending && playerIndex == GetCurrentWarPlayerIndex();
-            GUI.enabled = enabled;
+            if (!IsWarDieAvailable(playerIndex, i)) continue;
+            GUI.enabled = !warCardActionPending && playerIndex == GetCurrentWarPlayerIndex();
             if (GUI.Button(new Rect(x + i * 115, y - 5, 95, 60), player.dice[i].ToString(), buttonStyle))
                 gameManager.TryPlayDie(playerIndex, i);
             GUI.enabled = true;
@@ -743,13 +735,34 @@ public class CardadoWarManager : MonoBehaviour
     private void DrawCompletePanel(Rect panel, float width)
     {
         GUI.Label(new Rect(panel.x + 25, panel.y + 30, width - 50, 45), "WAR PHASE COMPLETE", titleStyle);
-        string message = warResolved
-            ? $"War resolved. {gameManager.Players[challengerIndex].playerId} completed the declaration."
-            : "All players have had their opportunity to declare a war.";
-        GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35), message, GUI.skin.label);
-
-        if (warResolved)
+        if (warResolved && challengerIndex >= 0)
         {
+            CardadoPlayerState player = gameManager.Players[challengerIndex];
+            bool canAgain = CanClaimWar(challengerIndex);
+            GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35),
+                canAgain
+                    ? $"War resolved. {player.playerId} still has a valid War and {player.chips} chip(s)."
+                    : $"War resolved. {player.playerId} cannot declare another War.", GUI.skin.label);
+
+            if (canAgain)
+            {
+                if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "DECLARE ANOTHER WAR", selectedButtonStyle))
+                {
+                    warResolved = false;
+                    challengerIndex = -1;
+                    targetIndex = -1;
+                    warWager = 0;
+                    AdvanceToCurrentClaimant();
+                }
+
+                if (GUI.Button(new Rect(panel.x + 25, panel.y + 230, width - 50, 60), "CONTINUE TO NEXT PLAYER", buttonStyle))
+                {
+                    currentClaimPosition++;
+                    AdvanceToCurrentClaimant();
+                }
+                return;
+            }
+
             if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "CONTINUE TO NEXT PLAYER", selectedButtonStyle))
             {
                 currentClaimPosition++;
@@ -758,14 +771,15 @@ public class CardadoWarManager : MonoBehaviour
             return;
         }
 
+        GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35),
+            "All players have had their opportunity to declare a war.", GUI.skin.label);
         if (GUI.Button(new Rect(panel.x + 25, panel.y + 195, width - 50, 60), "FINISH WAR PHASE", selectedButtonStyle))
             gameManager.CompleteWarPhase();
     }
 
     private void EnsureStyles()
     {
-        if (panelStyle != null)
-            return;
+        if (panelStyle != null) return;
         panelStyle = new GUIStyle(GUI.skin.box) { padding = new RectOffset(20, 20, 20, 20) };
         titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 20, fontStyle = FontStyle.Bold };
