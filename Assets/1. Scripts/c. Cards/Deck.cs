@@ -6,7 +6,7 @@ public class Deck
 {
     private readonly List<CardInstance> drawPile = new List<CardInstance>();
     private readonly List<CardInstance> discardPile = new List<CardInstance>();
-    private readonly Random rng = new Random();
+    private readonly System.Random rng = new System.Random();
 
     public Deck(List<CardData> cardDefinitions)
     {
