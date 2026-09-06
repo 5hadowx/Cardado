@@ -3,8 +3,8 @@ using UnityEngine;
 
 /// <summary>
 /// Coordinates the temporary War IMGUI with the card-action development overlay.
-/// The War manager owns claim/target/wager/order presentation; during actual War
-/// hands the card-action overlay owns the interactive card/die presentation.
+/// During actual War hands the card-action overlay owns the interactive card/die
+/// presentation, so the War manager's duplicate dice panel is hidden.
 /// </summary>
 public class CardadoWarDevelopmentUiCoordinator : MonoBehaviour
 {
@@ -13,6 +13,17 @@ public class CardadoWarDevelopmentUiCoordinator : MonoBehaviour
     private FieldInfo uiStepField;
     private FieldInfo showTemporaryUiField;
     private object lastUiStep;
+
+    [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
+    private static void Install()
+    {
+        if (FindFirstObjectByType<CardadoWarDevelopmentUiCoordinator>() != null)
+            return;
+
+        GameObject host = new GameObject("Cardado War Development UI Coordinator");
+        DontDestroyOnLoad(host);
+        host.AddComponent<CardadoWarDevelopmentUiCoordinator>();
+    }
 
     private void Awake()
     {
@@ -28,6 +39,17 @@ public class CardadoWarDevelopmentUiCoordinator : MonoBehaviour
 
     private void LateUpdate()
     {
+        if (gameManager == null)
+            gameManager = FindFirstObjectByType<CardadoGameManager>();
+        if (warManager == null)
+            warManager = FindFirstObjectByType<CardadoWarManager>();
+        if (warManager != null && (uiStepField == null || showTemporaryUiField == null))
+        {
+            BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
+            uiStepField = typeof(CardadoWarManager).GetField("uiStep", flags);
+            showTemporaryUiField = typeof(CardadoWarManager).GetField("showTemporaryUi", flags);
+        }
+
         if (gameManager == null || warManager == null || showTemporaryUiField == null || uiStepField == null)
             return;
 
