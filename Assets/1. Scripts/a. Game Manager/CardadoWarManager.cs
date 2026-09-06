@@ -38,8 +38,6 @@ public class CardadoWarManager : MonoBehaviour
     private bool warCardPlayedThisTurn;
     private readonly List<CardInstance> turnStartingCards = new List<CardInstance>();
 
-    // Cards held before a War starts. The claim cards are consumed, but every
-    // other pre-War card must be restored after the War.
     private readonly List<CardInstance> preservedChallengerCards = new List<CardInstance>();
     private readonly List<CardInstance> preservedTargetCards = new List<CardInstance>();
 
@@ -202,7 +200,6 @@ public class CardadoWarManager : MonoBehaviour
         if (optimalClaim == null || optimalClaim.Count == 0)
             return false;
 
-        // Consume only the cards used for this declaration. Every other card stays in hand.
         foreach (CardInstance card in optimalClaim)
         {
             if (!gameManager.Players[playerIndex].hand.cardsInHand.Remove(card))
@@ -620,7 +617,7 @@ public class CardadoWarManager : MonoBehaviour
             return;
         EnsureStyles();
         const float width = 760f;
-        const float height = 500f;
+        float height = uiStep == WarUiStep.Playing ? 210f : 500f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
         GUI.Box(panel, GUIContent.none, panelStyle);
         switch (uiStep)
@@ -643,14 +640,10 @@ public class CardadoWarManager : MonoBehaviour
         }
         CardadoPlayerState player = gameManager.Players[claimOrder[currentClaimPosition]];
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — DECLARE OR PASS", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
-            $"{player.playerId} — your turn to declare a war.", GUI.skin.label);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30),
-            $"Chips: {player.chips}    Optimal claim: {DescribeOptimalClaim(claimOrder[currentClaimPosition])}", GUI.skin.label);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "DECLARE WAR", buttonStyle))
-            TryClaimWar(claimOrder[currentClaimPosition]);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 230, width - 50, 60), "PASS", buttonStyle))
-            TryPassWar(claimOrder[currentClaimPosition]);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35), $"{player.playerId} — your turn to declare a war.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30), $"Chips: {player.chips}    Optimal claim: {DescribeOptimalClaim(claimOrder[currentClaimPosition])}", GUI.skin.label);
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "DECLARE WAR", buttonStyle)) TryClaimWar(claimOrder[currentClaimPosition]);
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 230, width - 50, 60), "PASS", buttonStyle)) TryPassWar(claimOrder[currentClaimPosition]);
         GUI.Label(new Rect(panel.x + 25, panel.y + 320, width - 50, 30), $"War order: {BuildClaimOrderLabel()}", GUI.skin.label);
     }
 
@@ -658,8 +651,7 @@ public class CardadoWarManager : MonoBehaviour
     {
         CardadoPlayerState challenger = gameManager.Players[challengerIndex];
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE OPPONENT", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
-            $"{challenger.playerId} challenges any opponent. The opponent cannot decline.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35), $"{challenger.playerId} challenges any opponent. The opponent cannot decline.", GUI.skin.label);
         float y = panel.y + 125;
         for (int i = 0; i < gameManager.Players.Count; i++)
         {
@@ -667,8 +659,7 @@ public class CardadoWarManager : MonoBehaviour
             CardadoPlayerState target = gameManager.Players[i];
             bool canBeTarget = target.chips >= 1;
             GUI.enabled = canBeTarget;
-            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), $"{target.playerId} — {target.chips} chip(s)", buttonStyle))
-                TryChooseTarget(i);
+            if (GUI.Button(new Rect(panel.x + 25, y, width - 50, 55), $"{target.playerId} — {target.chips} chip(s)", buttonStyle)) TryChooseTarget(i);
             GUI.enabled = true;
             y += 65;
         }
@@ -679,15 +670,12 @@ public class CardadoWarManager : MonoBehaviour
         CardadoPlayerState challenger = gameManager.Players[challengerIndex];
         CardadoPlayerState target = gameManager.Players[targetIndex];
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE WAGER", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35),
-            $"{challenger.playerId}: {challenger.chips} chips    vs    {target.playerId}: {target.chips} chips", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 35), $"{challenger.playerId}: {challenger.chips} chips    vs    {target.playerId}: {target.chips} chips", GUI.skin.label);
         for (int wager = 1; wager <= 2; wager++)
         {
             bool canWager = challenger.chips >= wager && target.chips >= wager;
             GUI.enabled = canWager;
-            if (GUI.Button(new Rect(panel.x + 25, panel.y + 145 + (wager - 1) * 80, width - 50, 60),
-                $"{wager} CHIP{(wager == 1 ? "" : "S")}", buttonStyle))
-                TryChooseWarWager(wager);
+            if (GUI.Button(new Rect(panel.x + 25, panel.y + 145 + (wager - 1) * 80, width - 50, 60), $"{wager} CHIP{(wager == 1 ? "" : "S")}", buttonStyle)) TryChooseWarWager(wager);
             GUI.enabled = true;
         }
     }
@@ -695,12 +683,9 @@ public class CardadoWarManager : MonoBehaviour
     private void DrawOrderPanel(Rect panel, float width)
     {
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE ORDER", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 45),
-            "The challenger sees their 3 dice and chooses who plays first.", GUI.skin.label);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 135, width - 50, 65), "CHALLENGER PLAYS FIRST", buttonStyle))
-            TryChooseWarOrder(true);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 220, width - 50, 65), "CHALLENGER PLAYS SECOND", buttonStyle))
-            TryChooseWarOrder(false);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 45), "The challenger sees their 3 dice and chooses who plays first.", GUI.skin.label);
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 135, width - 50, 65), "CHALLENGER PLAYS FIRST", buttonStyle)) TryChooseWarOrder(true);
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 220, width - 50, 65), "CHALLENGER PLAYS SECOND", buttonStyle)) TryChooseWarOrder(false);
     }
 
     private void DrawPlayingPanel(Rect panel, float width)
@@ -709,27 +694,8 @@ public class CardadoWarManager : MonoBehaviour
         CardadoPlayerState target = gameManager.Players[targetIndex];
         string currentPlayer = GetCurrentWarPlayer()?.playerId ?? "?";
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — 3 HANDS", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 30),
-            $"{challenger.playerId} {challengerHandsWon} — {targetHandsWon} {target.playerId}", GUI.skin.label);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30),
-            $"Hand {currentHandNumber}: {currentPlayer} {(warCardActionPending ? "chooses a card." : "plays a die.")}", GUI.skin.label);
-        DrawWarDice(panel, challengerIndex, challenger.playerId, panel.y + 150);
-        DrawWarDice(panel, targetIndex, target.playerId, panel.y + 270);
-    }
-
-    private void DrawWarDice(Rect panel, int playerIndex, string playerName, float y)
-    {
-        GUI.Label(new Rect(panel.x + 25, y, 200, 30), playerName, GUI.skin.label);
-        float x = panel.x + 230;
-        CardadoPlayerState player = gameManager.Players[playerIndex];
-        for (int i = 0; i < player.dice.Count; i++)
-        {
-            if (!IsWarDieAvailable(playerIndex, i)) continue;
-            GUI.enabled = !warCardActionPending && playerIndex == GetCurrentWarPlayerIndex();
-            if (GUI.Button(new Rect(x + i * 115, y - 5, 95, 60), player.dice[i].ToString(), buttonStyle))
-                gameManager.TryPlayDie(playerIndex, i);
-            GUI.enabled = true;
-        }
+        GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 30), $"{challenger.playerId} {challengerHandsWon} — {targetHandsWon} {target.playerId}", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30), $"Hand {currentHandNumber}: {currentPlayer} {(warCardActionPending ? "chooses a card." : "plays a die.")}", GUI.skin.label);
     }
 
     private void DrawCompletePanel(Rect panel, float width)
@@ -739,11 +705,7 @@ public class CardadoWarManager : MonoBehaviour
         {
             CardadoPlayerState player = gameManager.Players[challengerIndex];
             bool canAgain = CanClaimWar(challengerIndex);
-            GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35),
-                canAgain
-                    ? $"War resolved. {player.playerId} still has a valid War and {player.chips} chip(s)."
-                    : $"War resolved. {player.playerId} cannot declare another War.", GUI.skin.label);
-
+            GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35), canAgain ? $"War resolved. {player.playerId} still has a valid War and {player.chips} chip(s)." : $"War resolved. {player.playerId} cannot declare another War.", GUI.skin.label);
             if (canAgain)
             {
                 if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "DECLARE ANOTHER WAR", selectedButtonStyle))
@@ -754,7 +716,6 @@ public class CardadoWarManager : MonoBehaviour
                     warWager = 0;
                     AdvanceToCurrentClaimant();
                 }
-
                 if (GUI.Button(new Rect(panel.x + 25, panel.y + 230, width - 50, 60), "CONTINUE TO NEXT PLAYER", buttonStyle))
                 {
                     currentClaimPosition++;
@@ -762,7 +723,6 @@ public class CardadoWarManager : MonoBehaviour
                 }
                 return;
             }
-
             if (GUI.Button(new Rect(panel.x + 25, panel.y + 155, width - 50, 60), "CONTINUE TO NEXT PLAYER", selectedButtonStyle))
             {
                 currentClaimPosition++;
@@ -770,11 +730,8 @@ public class CardadoWarManager : MonoBehaviour
             }
             return;
         }
-
-        GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35),
-            "All players have had their opportunity to declare a war.", GUI.skin.label);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 195, width - 50, 60), "FINISH WAR PHASE", selectedButtonStyle))
-            gameManager.CompleteWarPhase();
+        GUI.Label(new Rect(panel.x + 25, panel.y + 95, width - 50, 35), "All players have had their opportunity to declare a war.", GUI.skin.label);
+        if (GUI.Button(new Rect(panel.x + 25, panel.y + 195, width - 50, 60), "FINISH WAR PHASE", selectedButtonStyle)) gameManager.CompleteWarPhase();
     }
 
     private void EnsureStyles()
@@ -785,4 +742,6 @@ public class CardadoWarManager : MonoBehaviour
         buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 20, fontStyle = FontStyle.Bold };
         selectedButtonStyle = new GUIStyle(buttonStyle);
     }
+
+    private void CleanupWarHandEffects() { }
 }
