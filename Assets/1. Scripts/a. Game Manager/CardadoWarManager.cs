@@ -3,10 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>
-/// Authoritative War state and rules. A War is a temporary 1v1 context: only
-/// the challenger and target receive the temporary War hand/dice collections.
-/// Existing PlayerState objects are bound to those collections for compatibility
-/// with the rest of the gameplay code and restored when War ends.
+/// Authoritative War rules. War cards and dice live only in CardadoWarContext;
+/// normal CardadoPlayerState hands/dice are never repurposed for the temporary War.
 /// </summary>
 public class CardadoWarManager : MonoBehaviour
 {
@@ -20,11 +18,8 @@ public class CardadoWarManager : MonoBehaviour
     private readonly List<int> claimOrder = new List<int>();
     private readonly List<CardInstance> preservedChallengerCards = new List<CardInstance>();
     private readonly List<CardInstance> preservedTargetCards = new List<CardInstance>();
-    private readonly List<CardInstance> warDiscardedCards = new List<CardInstance>();
 
     private CardadoWarContext warContext;
-    private CardadoWarContext.Binding challengerBinding;
-    private CardadoWarContext.Binding targetBinding;
     private WarUiStep uiStep;
     private int currentClaimPosition;
     private int challengerIndex = -1;
@@ -62,13 +57,12 @@ public class CardadoWarManager : MonoBehaviour
     private void OnDisable()
     {
         if (gameManager != null) gameManager.PhaseChanged -= OnPhaseChanged;
-        RestoreWarState();
+        CleanupContextWithoutApplyingResult();
     }
 
     private void Start()
     {
-        if (gameManager != null && gameManager.Phase == CardadoGamePhase.WarResolution)
-            BeginWarPhase();
+        if (gameManager != null && gameManager.Phase == CardadoGamePhase.WarResolution) BeginWarPhase();
     }
 
     private void OnPhaseChanged(CardadoGamePhase phase)
@@ -78,7 +72,7 @@ public class CardadoWarManager : MonoBehaviour
 
     private void BeginWarPhase()
     {
-        RestoreWarState();
+        CleanupContextWithoutApplyingResult();
         claimOrder.Clear();
         currentClaimPosition = 0;
         challengerIndex = -1;
@@ -100,7 +94,6 @@ public class CardadoWarManager : MonoBehaviour
         targetIndex = -1;
         warWager = 0;
         warResolved = false;
-        warContext = null;
         uiStep = WarUiStep.Claim;
         while (currentClaimPosition < claimOrder.Count)
         {
@@ -176,20 +169,17 @@ public class CardadoWarManager : MonoBehaviour
     {
         if (gameManager.RoundDeck == null) throw new InvalidOperationException("War cannot start because the round deck is not initialized.");
 
-        CardadoPlayerState challenger = gameManager.Players[challengerIndex];
-        CardadoPlayerState target = gameManager.Players[targetIndex];
         preservedChallengerCards.Clear();
         preservedTargetCards.Clear();
-        preservedChallengerCards.AddRange(challenger.hand.cardsInHand);
-        preservedTargetCards.AddRange(target.hand.cardsInHand);
+        preservedChallengerCards.AddRange(gameManager.Players[challengerIndex].hand.cardsInHand);
+        preservedTargetCards.AddRange(gameManager.Players[targetIndex].hand.cardsInHand);
 
-        warContext = CardadoWarContext.Create(challengerIndex, challenger.playerId, challenger.chips,
-            targetIndex, target.playerId, target.chips);
-        challengerBinding = warContext.Bind(challenger, warContext.Challenger);
-        targetBinding = warContext.Bind(target, warContext.Target);
-
+        warContext = CardadoWarContext.Create(
+            challengerIndex, gameManager.Players[challengerIndex].playerId, gameManager.Players[challengerIndex].chips,
+            targetIndex, gameManager.Players[targetIndex].playerId, gameManager.Players[targetIndex].chips);
         warContext.Wager = warWager;
         warContext.CurrentTurnSlot = challengerPlaysFirst ? 0 : 1;
+
         DealWarCards(warContext.Challenger, warCardCount);
         DealWarCards(warContext.Target, warCardCount);
         RollWarDice(warContext.Challenger, warDiceCount);
@@ -251,10 +241,6 @@ public class CardadoWarManager : MonoBehaviour
         return true;
     }
 
-    /// <summary>
-    /// Controller-facing War card action. Card effects are resolved here, never in the UI.
-    /// Any player-selection target inside War is the single other participant.
-    /// </summary>
     public bool TryPlayWarCard(int playerIndex, int cardIndex)
     {
         if (!WarInProgress || !warCardActionPending || playerIndex != GetCurrentWarPlayerIndex()) return false;
@@ -278,44 +264,37 @@ public class CardadoWarManager : MonoBehaviour
         if (card.data.isBlankCard) return false;
         CardadoWarContext.Participant opponent = warContext.OpponentOf(actor);
 
+        if (card.data.rarity == CardRarity.Special)
+            return ResolveSpecial(actor, opponent, card);
+
         if (card.data.isModifier)
         {
             int die = FindFirstTargetableDie(opponent);
-            if (die >= 0)
-            {
-                int old = opponent.MutableDice[die];
-                int delta = card.data.canAdd ? 1 : -1;
-                if (old + delta >= 1 && old + delta <= 6)
-                {
-                    opponent.MutableDice[die] = old + delta;
-                    warContext.AddEffect(CardadoWarContext.EffectType.Modifier, card, actor, opponent, die, old);
-                    return true;
-                }
-            }
-            return false;
+            if (die < 0) return false;
+            int old = opponent.MutableDice[die];
+            int delta = card.data.canAdd ? 1 : -1;
+            if (old + delta < 1 || old + delta > 6) return false;
+            opponent.MutableDice[die] = old + delta;
+            warContext.AddEffect(CardadoWarContext.EffectType.Modifier, card, actor, opponent, die, old);
+            return true;
         }
 
         switch (card.data.cardType)
         {
-            case CardType.Artist: Reroll(actor, FindFirstAvailableDie(actor), 1); return false;
-            case CardType.Knight: Reroll(opponent, FindFirstTargetableDie(opponent), 1); return false;
-            case CardType.Collector: return ResolveCollector(actor, opponent, card);
+            case CardType.Artist: Reroll(actor, FindFirstAvailableDie(actor), 1); break;
+            case CardType.Knight: Reroll(opponent, FindFirstTargetableDie(opponent), 1); break;
+            case CardType.Collector: ResolveCollector(actor, opponent); break;
             case CardType.Bodyguard:
                 int bodyguardDie = FindFirstTargetableDie(actor);
-                if (bodyguardDie >= 0) warContext.AddEffect(CardadoWarContext.EffectType.BodyguardDie, card, actor, actor, bodyguardDie);
-                return bodyguardDie >= 0;
-            case CardType.Mirror:
-                Exchange(actor, FindFirstTargetableDie(actor), opponent, FindFirstTargetableDie(opponent));
-                return false;
-            case CardType.Executioner: return ResolveExecutioner(actor, opponent, card);
-            case CardType.Joker: Flip(opponent, FindFirstTargetableDie(opponent)); return false;
-            case CardType.King: RerollAll(actor); RerollAll(opponent); return false;
-            case CardType.Queen: return ResolveQueen(actor, opponent, card);
-            case CardType.GordonRobleys: Reroll(actor, FindFirstAvailableDie(actor), 3); return false;
+                if (bodyguardDie >= 0) return AddPersistentEffect(CardadoWarContext.EffectType.BodyguardDie, card, actor, actor, bodyguardDie);
+                break;
+            case CardType.Mirror: Exchange(actor, FindFirstTargetableDie(actor), opponent, FindFirstTargetableDie(opponent)); break;
+            case CardType.Executioner: ResolveExecutioner(actor, opponent); break;
+            case CardType.Joker: Flip(opponent, FindFirstTargetableDie(opponent)); break;
+            case CardType.King: RerollAll(actor); RerollAll(opponent); break;
+            case CardType.Queen: ResolveQueen(actor, opponent); break;
+            case CardType.GordonRobleys: Reroll(actor, FindFirstAvailableDie(actor), 3); break;
         }
-
-        if (card.data.rarity == CardRarity.Special) return ResolveSpecial(actor, opponent, card);
-        if (card.data.rarity == CardRarity.Royalty) return false;
         return false;
     }
 
@@ -325,64 +304,62 @@ public class CardadoWarManager : MonoBehaviour
         {
             case CardType.Artist: Reroll(actor, FindFirstAvailableDie(actor), 3); return false;
             case CardType.Knight: RerollAll(opponent); return false;
-            case CardType.Collector: return ResolveCollector(actor, opponent, card);
-            case CardType.Bodyguard:
-                warContext.AddEffect(CardadoWarContext.EffectType.BodyguardPlayer, card, actor, opponent);
-                return true;
-            case CardType.Mirror:
-                Exchange(actor, FindFirstTargetableDie(actor), opponent, FindFirstTargetableDie(opponent));
-                return false;
+            case CardType.Collector: ResolveCollector(actor, opponent); return false;
+            case CardType.Bodyguard: return AddPersistentEffect(CardadoWarContext.EffectType.BodyguardPlayer, card, actor, opponent);
+            case CardType.Mirror: Exchange(actor, FindFirstTargetableDie(actor), opponent, FindFirstTargetableDie(opponent)); return false;
             case CardType.Executioner:
-                List<CardInstance> cards = new List<CardInstance>(opponent.Cards);
-                opponent.MutableCards.Clear();
-                foreach (CardInstance c in cards) gameManager.DiscardResolvedCard(c);
+                DiscardWarCards(opponent);
                 return false;
+            default: return false;
         }
-        return false;
     }
 
-    private bool ResolveCollector(CardadoWarContext.Participant actor, CardadoWarContext.Participant opponent, CardInstance collectorCard)
+    private bool AddPersistentEffect(CardadoWarContext.EffectType type, CardInstance card,
+        CardadoWarContext.Participant owner, CardadoWarContext.Participant target, int dieIndex = -1)
     {
-        if (opponent.MutableCards.Count == 0) return false;
+        warContext.AddEffect(type, card, owner, target, dieIndex);
+        return true;
+    }
+
+    private void ResolveCollector(CardadoWarContext.Participant actor, CardadoWarContext.Participant opponent)
+    {
+        if (opponent.MutableCards.Count == 0) return;
         CardInstance stolen = opponent.MutableCards[0];
         opponent.MutableCards.RemoveAt(0);
-        actor.MutableCards.Add(stolen);
-        // The stolen card is immediately resolved using the same War rules.
-        actor.MutableCards.Remove(stolen);
         stolen.isPlayed = true;
         warContext.MarkCardPlayed(actor);
         bool persistent = ResolveWarCard(actor, stolen);
         if (!persistent) gameManager.DiscardResolvedCard(stolen);
-        return false;
     }
 
-    private bool ResolveExecutioner(CardadoWarContext.Participant actor, CardadoWarContext.Participant opponent, CardInstance card)
+    private void ResolveExecutioner(CardadoWarContext.Participant actor, CardadoWarContext.Participant opponent)
     {
         if (!warContext.HasPlayedCard(opponent))
         {
             warContext.Block(opponent);
-            return false;
+            return;
         }
         for (int i = warContext.Effects.Count - 1; i >= 0; i--)
         {
             CardadoWarContext.Effect effect = warContext.Effects[i];
             if (effect.OwnerIndex != opponent.PlayerIndex) continue;
-            if (effect.Card != null) gameManager.DiscardResolvedCard(effect.Card);
             if (effect.Type == CardadoWarContext.EffectType.Modifier && effect.TargetIndex == opponent.PlayerIndex && effect.DieIndex >= 0)
-                opponent.MutableDice[effect.DieIndex] = effect.OriginalValue;
+            {
+                CardadoWarContext.Participant effectTarget = warContext.GetParticipant(effect.TargetIndex);
+                if (effectTarget != null && effect.DieIndex < effectTarget.MutableDice.Count) effectTarget.MutableDice[effect.DieIndex] = effect.OriginalValue;
+            }
+            if (effect.Card != null) gameManager.DiscardResolvedCard(effect.Card);
             warContext.RemoveEffect(effect);
             break;
         }
-        return false;
     }
 
-    private bool ResolveQueen(CardadoWarContext.Participant actor, CardadoWarContext.Participant opponent, CardInstance card)
+    private void ResolveQueen(CardadoWarContext.Participant actor, CardadoWarContext.Participant opponent)
     {
         DiscardWarCards(actor);
         DiscardWarCards(opponent);
         DealWarCards(actor, warCardCount);
         DealWarCards(opponent, warCardCount);
-        return false;
     }
 
     private void DiscardWarCards(CardadoWarContext.Participant participant)
@@ -421,8 +398,7 @@ public class CardadoWarManager : MonoBehaviour
 
     private int FindFirstAvailableDie(CardadoWarContext.Participant participant)
     {
-        for (int i = 0; i < participant.MutableDice.Count; i++)
-            if (warContext.IsDieAvailable(participant, i)) return i;
+        for (int i = 0; i < participant.MutableDice.Count; i++) if (warContext.IsDieAvailable(participant, i)) return i;
         return -1;
     }
 
@@ -437,10 +413,8 @@ public class CardadoWarManager : MonoBehaviour
     {
         foreach (CardadoWarContext.Effect effect in warContext.Effects)
         {
-            if (effect.Type == CardadoWarContext.EffectType.BodyguardDie && effect.TargetIndex == participant.PlayerIndex && effect.DieIndex == dieIndex)
-                return true;
-            if (effect.Type == CardadoWarContext.EffectType.BodyguardPlayer && effect.TargetIndex == participant.PlayerIndex)
-                return true;
+            if (effect.Type == CardadoWarContext.EffectType.BodyguardDie && effect.TargetIndex == participant.PlayerIndex && effect.DieIndex == dieIndex) return true;
+            if (effect.Type == CardadoWarContext.EffectType.BodyguardPlayer && effect.TargetIndex == participant.PlayerIndex) return true;
         }
         return false;
     }
@@ -481,20 +455,34 @@ public class CardadoWarManager : MonoBehaviour
 
     private void ResolveCurrentWarHand()
     {
-        int challengerValue = challengerCurrentDieIndex >= 0 ? gameManager.Players[challengerIndex].dice[challengerCurrentDieIndex] : 0;
-        int targetValue = targetCurrentDieIndex >= 0 ? gameManager.Players[targetIndex].dice[targetCurrentDieIndex] : 0;
+        int challengerValue = challengerCurrentDieIndex >= 0 ? warContext.Challenger.MutableDice[challengerCurrentDieIndex] : 0;
+        int targetValue = targetCurrentDieIndex >= 0 ? warContext.Target.MutableDice[targetCurrentDieIndex] : 0;
         if (challengerValue > targetValue) warContext.ChallengerHandsWon++;
         else if (targetValue > challengerValue) warContext.TargetHandsWon++;
 
-        warContext.ClearHandScopedEffects();
+        DiscardHandScopedEffects();
         if (warContext.ChallengerHandsWon >= 2 || warContext.TargetHandsWon >= 2 || warContext.HandNumber >= warDiceCount)
         {
-            ResolveWar(warContext.ChallengerHandsWon >= warContext.TargetHandsWon ? challengerIndex : targetIndex);
+            int winner = warContext.ChallengerHandsWon >= warContext.TargetHandsWon ? challengerIndex : targetIndex;
+            ResolveWar(winner);
             return;
         }
         warContext.HandNumber++;
         currentWarTurn = challengerPlaysFirst ? 0 : 1;
         BeginWarHand();
+    }
+
+    private void DiscardHandScopedEffects()
+    {
+        List<CardadoWarContext.Effect> remove = new List<CardadoWarContext.Effect>();
+        foreach (CardadoWarContext.Effect effect in warContext.Effects)
+            if (effect.Type == CardadoWarContext.EffectType.BodyguardDie || effect.Type == CardadoWarContext.EffectType.BodyguardHand) remove.Add(effect);
+        foreach (CardadoWarContext.Effect effect in remove)
+        {
+            if (effect.Card != null) gameManager.DiscardResolvedCard(effect.Card);
+            warContext.RemoveEffect(effect);
+        }
+        warContext.ClearHandScopedEffects();
     }
 
     private void ResolveWar(int winnerIndex)
@@ -506,39 +494,35 @@ public class CardadoWarManager : MonoBehaviour
             gameManager.Players[loserIndex].chips -= transfer;
             gameManager.Players[winnerIndex].chips += transfer;
         }
+
         DiscardWarCards(warContext.Challenger);
         DiscardWarCards(warContext.Target);
-        RestoreWarState();
+        DiscardAllPersistentEffects();
+        warContext = null;
+        warCardActionPending = false;
         warResolved = true;
         uiStep = WarUiStep.Complete;
     }
 
-    private void RestoreWarState()
+    private void DiscardAllPersistentEffects()
     {
         if (warContext == null) return;
-        CardadoPlayerState challenger = gameManager != null && challengerIndex >= 0 && challengerIndex < gameManager.Players.Count ? gameManager.Players[challengerIndex] : null;
-        CardadoPlayerState target = gameManager != null && targetIndex >= 0 && targetIndex < gameManager.Players.Count ? gameManager.Players[targetIndex] : null;
-        challengerBinding?.Restore();
-        targetBinding?.Restore();
-        challengerBinding = null;
-        targetBinding = null;
-
-        if (challenger != null) RestorePreservedCards(challenger, preservedChallengerCards);
-        if (target != null) RestorePreservedCards(target, preservedTargetCards);
-        preservedChallengerCards.Clear();
-        preservedTargetCards.Clear();
-        warContext = null;
-        warCardActionPending = false;
+        List<CardadoWarContext.Effect> effects = new List<CardadoWarContext.Effect>(warContext.Effects);
+        foreach (CardadoWarContext.Effect effect in effects)
+        {
+            if (effect.Card != null) gameManager.DiscardResolvedCard(effect.Card);
+            warContext.RemoveEffect(effect);
+        }
     }
 
-    private void RestorePreservedCards(CardadoPlayerState player, List<CardInstance> cards)
+    private void CleanupContextWithoutApplyingResult()
     {
-        foreach (CardInstance card in cards)
-        {
-            if (card == null) continue;
-            card.isPlayed = false;
-            player.hand.AddCard(card);
-        }
+        if (warContext == null) return;
+        DiscardWarCards(warContext.Challenger);
+        DiscardWarCards(warContext.Target);
+        DiscardAllPersistentEffects();
+        warContext = null;
+        warCardActionPending = false;
     }
 
     private int GetCurrentWarPlayerIndex() => currentWarTurn == 0 ? challengerIndex : targetIndex;
@@ -626,7 +610,6 @@ public class CardadoWarManager : MonoBehaviour
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — TEMPORARY 1v1", titleStyle);
         GUI.Label(new Rect(panel.x + 25, panel.y + 70, width - 50, 30), $"{warContext.Challenger.PlayerId} {warContext.ChallengerHandsWon} — {warContext.TargetHandsWon} {warContext.Target.PlayerId}", GUI.skin.label);
         if (current != null) GUI.Label(new Rect(panel.x + 25, panel.y + 105, width - 50, 30), $"Hand {warContext.HandNumber} — {current.PlayerId}", GUI.skin.label);
-
         DrawWarCards(panel, current);
         DrawWarDice(panel, warContext.Challenger, panel.y + 285);
         DrawWarDice(panel, warContext.Target, panel.y + 385);
@@ -635,7 +618,7 @@ public class CardadoWarManager : MonoBehaviour
     private void DrawWarCards(Rect panel, CardadoWarContext.Participant current)
     {
         if (current == null) return;
-        GUI.Label(new Rect(panel.x + 25, panel.y + 140, width: 300, height: 30), warCardActionPending ? "Choose a War card:" : "Card action resolved.", GUI.skin.label);
+        GUI.Label(new Rect(panel.x + 25, panel.y + 140, 700, 30), warCardActionPending ? "Choose a War card:" : "Card action resolved.", GUI.skin.label);
         if (!warCardActionPending) return;
         float x = panel.x + 25;
         for (int i = 0; i < current.Cards.Count; i++)
@@ -669,7 +652,6 @@ public class CardadoWarManager : MonoBehaviour
             bool canAgain = CanClaimWar(challengerIndex);
             if (canAgain && GUI.Button(new Rect(panel.x + 25, panel.y + 120, width - 50, 60), "DECLARE ANOTHER WAR", selectedButtonStyle))
             {
-                currentClaimPosition = Math.Min(currentClaimPosition, claimOrder.Count - 1);
                 AdvanceToCurrentClaimant();
                 return;
             }
