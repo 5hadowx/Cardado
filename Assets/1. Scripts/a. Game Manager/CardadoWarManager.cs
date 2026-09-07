@@ -94,6 +94,16 @@ public class CardadoWarManager : MonoBehaviour
 
     public bool IsWarInProgressForDevelopment() => WarInProgress;
 
+    private bool warPhaseInitialized;
+
+    public void EnsureWarPhaseInitialized()
+    {
+        if (gameManager == null) gameManager = FindFirstObjectByType<CardadoGameManager>();
+        if (gameManager == null || gameManager.Phase != CardadoGamePhase.WarResolution) return;
+        if (warPhaseInitialized) return;
+        BeginWarPhase();
+    }
+
     public CardadoWarContext.Participant GetJokerTargetForDevelopment() => pendingJokerTarget;
 
     public int GetPendingArtistResult(int index)
@@ -130,6 +140,8 @@ public class CardadoWarManager : MonoBehaviour
 
     private void BeginWarPhase()
     {
+        warPhaseInitialized = true;
+        Debug.Log("[Cardado] War phase initialized.");
         CleanupContextWithoutApplyingResult();
         claimOrder.Clear();
         currentClaimPosition = 0;

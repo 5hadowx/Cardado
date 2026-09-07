@@ -57,6 +57,7 @@ public class CardadoGameManager : MonoBehaviour
     private Queue<RoundSetupDecisionType> pendingDealerDecisions;
     private int handTurnsCompleted;
     private CardadoCardActionManager cardActionManager;
+    private CardadoWarManager warManager;
 
     private void Awake()
     {
@@ -67,7 +68,8 @@ public class CardadoGameManager : MonoBehaviour
         InitializeDeck();
         cardActionManager = GetComponent<CardadoCardActionManager>();
         if (cardActionManager == null) cardActionManager = gameObject.AddComponent<CardadoCardActionManager>();
-        if (GetComponent<CardadoWarManager>() == null) gameObject.AddComponent<CardadoWarManager>();
+        warManager = GetComponent<CardadoWarManager>();
+        if (warManager == null) warManager = gameObject.AddComponent<CardadoWarManager>();
         if (GetComponent<CardadoCardActionDevelopmentOverlay>() == null) gameObject.AddComponent<CardadoCardActionDevelopmentOverlay>();
     }
 
@@ -316,6 +318,7 @@ public class CardadoGameManager : MonoBehaviour
         }
         RoundResolutionCompleted?.Invoke();
         SetPhase(CardadoGamePhase.WarResolution);
+        if (warManager != null) warManager.EnsureWarPhaseInitialized();
     }
 
     public void CompleteWarPhase()
