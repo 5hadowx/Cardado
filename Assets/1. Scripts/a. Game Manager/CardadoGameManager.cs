@@ -318,7 +318,12 @@ public class CardadoGameManager : MonoBehaviour
         }
         RoundResolutionCompleted?.Invoke();
         SetPhase(CardadoGamePhase.WarResolution);
-        if (warManager != null) warManager.EnsureWarPhaseInitialized();
+        if (warManager == null)
+        {
+            warManager = FindFirstObjectByType<CardadoWarManager>();
+            if (warManager == null) warManager = gameObject.AddComponent<CardadoWarManager>();
+        }
+        warManager.EnsureWarPhaseInitialized();
     }
 
     public void CompleteWarPhase()
