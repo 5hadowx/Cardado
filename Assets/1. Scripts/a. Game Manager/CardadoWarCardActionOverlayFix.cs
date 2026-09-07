@@ -8,7 +8,7 @@ using UnityEngine;
 /// and exits the IMGUI pass immediately after an action to prevent list mutation
 /// from changing the card represented by a button.
 ///
-/// The WarManager remains authoritative; the private-method bridge is limited to
+/// The WarManager remains authoritative. The private-method bridge is limited to
 /// the existing Nobleman/Artist follow-up because the current WarManager exposes
 /// that action only through its internal rule path.
 /// </summary>
@@ -166,15 +166,14 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
             string label = $"DIE {capturedIndex + 1}\n{selectedActor.Dice[capturedIndex]}";
             if (GUI.Button(new Rect(panel.x + 30 + capturedIndex * 125, panel.y + 120, 110, 70), label, buttonStyle))
             {
-                bool accepted;
+                bool accepted = false;
                 if (choiceStage == 2)
                 {
                     accepted = warManager.TryChooseWarBodyguardDie(capturedIndex);
                 }
-                else
+                else if (resolveNoblemanArtistDie != null)
                 {
-                    accepted = resolveNoblemanArtistDie != null &&
-                        (bool)resolveNoblemanArtistDie.Invoke(warManager, new object[] { capturedIndex });
+                    accepted = (bool)resolveNoblemanArtistDie.Invoke(warManager, new object[] { capturedIndex });
                 }
 
                 if (accepted)
