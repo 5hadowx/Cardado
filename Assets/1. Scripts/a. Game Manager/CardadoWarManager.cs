@@ -65,7 +65,6 @@ public class CardadoWarManager : MonoBehaviour
     private CardadoWarPendingChoice pendingChoice;
     private CardadoWarContext.Participant pendingChoiceActor;
     private CardInstance pendingChoiceCard;
-    private bool pendingSpecialMode;
     private bool pendingCollectorOwnSelected;
     private bool pendingCollectorOpponentSelected;
     private CardInstance pendingCollectorOwnCard;
@@ -419,7 +418,6 @@ public class CardadoWarManager : MonoBehaviour
         pendingChoice = choice;
         pendingChoiceActor = actor;
         pendingChoiceCard = card;
-        pendingSpecialMode = false;
         pendingCollectorOwnSelected = false;
         pendingCollectorOpponentSelected = false;
         pendingCollectorOwnCard = null;
@@ -437,7 +435,6 @@ public class CardadoWarManager : MonoBehaviour
         pendingChoice = CardadoWarPendingChoice.None;
         pendingChoiceActor = null;
         pendingChoiceCard = null;
-        pendingSpecialMode = false;
         pendingCollectorOwnSelected = false;
         pendingCollectorOpponentSelected = false;
         pendingCollectorOwnCard = null;
