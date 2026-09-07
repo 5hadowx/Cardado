@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using UnityEngine;
 
 /// <summary>Development-only War presentation. WarManager remains the rules authority.</summary>
@@ -15,6 +16,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
     private int lastWarChallenger = -1;
     private bool warWasStarted;
     private CardadoGamePhase lastPhase;
+    private readonly HashSet<int> processedClaimants = new HashSet<int>();
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Install()
@@ -100,6 +102,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         {
             if (warManager.TryClaimWar(challenger))
             {
+                processedClaimants.Add(challenger);
                 lastWarChallenger = challenger;
                 preWarStep = PreWarStep.Target;
             }
@@ -110,6 +113,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         {
             if (warManager.TryPassWar(challenger))
             {
+                processedClaimants.Add(challenger);
                 claimSearchStart = (challenger + 1) % gameManager.Players.Count;
                 activeClaimant = -1;
             }
@@ -171,6 +175,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         for (int offset = 0; offset < gameManager.Players.Count; offset++)
         {
             int playerIndex = (startIndex + offset) % gameManager.Players.Count;
+            if (processedClaimants.Contains(playerIndex)) continue;
             if (warManager.CanClaimWar(playerIndex)) return playerIndex;
         }
         return -1;
@@ -406,6 +411,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
             bool claimed = advanced && warManager.TryClaimWar(nextClaimant);
             if (claimed)
             {
+                processedClaimants.Add(nextClaimant);
                 lastWarChallenger = nextClaimant;
                 warWasStarted = false;
                 preWarStep = PreWarStep.Target;
@@ -418,6 +424,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         {
             if (warManager.TryContinueWarPhase())
             {
+                processedClaimants.Add(nextClaimant);
                 warWasStarted = false;
                 preWarStep = PreWarStep.Claim;
                 activeClaimant = -1;
@@ -441,6 +448,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         selectedTarget = -1;
         lastWarChallenger = -1;
         warWasStarted = false;
+        processedClaimants.Clear();
     }
 
     private void Act(Func<bool> action)
