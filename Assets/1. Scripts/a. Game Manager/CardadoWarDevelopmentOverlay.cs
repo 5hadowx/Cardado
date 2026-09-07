@@ -90,8 +90,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         int challenger = FindFirstEligibleClaimant(claimSearchStart);
         if (challenger < 0)
         {
-            GUILayout.Label("No eligible War claimant.");
-            if (GUILayout.Button("Finish War phase")) Act(() => warManager.TryFinishWarPhase());
+            Act(() => warManager.TryFinishWarPhase());
             return;
         }
 
@@ -388,33 +387,57 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
 
     private void DrawWarComplete()
     {
-        if (lastWarChallenger >= 0 && warManager.CanClaimWar(lastWarChallenger) && GUILayout.Button("Declare another War"))
+        if (lastWarChallenger >= 0 && warManager.CanClaimWar(lastWarChallenger))
         {
-            if (warManager.TryDeclareAnotherWar(lastWarChallenger))
+            GUILayout.Label($"Player {lastWarChallenger + 1}: declare another War or pass");
+            if (GUILayout.Button("Declare War"))
             {
-                warWasStarted = false;
-                preWarStep = PreWarStep.Claim;
-                activeClaimant = lastWarChallenger;
-                claimSearchStart = lastWarChallenger;
+                if (warManager.TryDeclareAnotherWar(lastWarChallenger))
+                {
+                    warWasStarted = false;
+                    preWarStep = PreWarStep.Target;
+                    activeClaimant = lastWarChallenger;
+                    claimSearchStart = lastWarChallenger;
+                }
+                Act(() => true);
             }
-            Act(() => true);
+
+            if (GUILayout.Button("Pass"))
+            {
+                if (warManager.TryContinueWarPhase())
+                {
+                    warWasStarted = false;
+                    preWarStep = PreWarStep.Claim;
+                    activeClaimant = -1;
+                    claimSearchStart = (lastWarChallenger + 1) % gameManager.Players.Count;
+
+                    if (FindFirstEligibleClaimant(claimSearchStart) < 0)
+                    {
+                        Act(() => warManager.TryFinishWarPhase());
+                        return;
+                    }
+                }
+                Act(() => true);
+            }
+            return;
         }
 
-        if (GUILayout.Button("Continue to next claimant"))
+        if (GUILayout.Button("Pass"))
         {
             if (warManager.TryContinueWarPhase())
             {
                 warWasStarted = false;
                 preWarStep = PreWarStep.Claim;
                 activeClaimant = -1;
-                claimSearchStart = lastWarChallenger >= 0
-                    ? (lastWarChallenger + 1) % gameManager.Players.Count
-                    : gameManager.StartingPlayerIndex;
+                claimSearchStart = gameManager.StartingPlayerIndex;
+                if (FindFirstEligibleClaimant(claimSearchStart) < 0)
+                {
+                    Act(() => warManager.TryFinishWarPhase());
+                    return;
+                }
             }
             Act(() => true);
         }
-
-        if (GUILayout.Button("Finish War phase")) Act(() => warManager.TryFinishWarPhase());
     }
 
     private void ResetWarPresentation()
