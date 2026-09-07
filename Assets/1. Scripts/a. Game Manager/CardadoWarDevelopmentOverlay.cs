@@ -387,39 +387,31 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
 
     private void DrawWarComplete()
     {
-        if (lastWarChallenger >= 0 && warManager.CanClaimWar(lastWarChallenger))
+        int start = lastWarChallenger >= 0
+            ? (lastWarChallenger + 1) % gameManager.Players.Count
+            : gameManager.StartingPlayerIndex;
+        int nextClaimant = FindFirstEligibleClaimant(start);
+
+        if (nextClaimant < 0)
         {
-            GUILayout.Label($"Player {lastWarChallenger + 1}: declare another War or pass");
-            if (GUILayout.Button("Declare War"))
-            {
-                if (warManager.TryDeclareAnotherWar(lastWarChallenger))
-                {
-                    warWasStarted = false;
-                    preWarStep = PreWarStep.Target;
-                    activeClaimant = lastWarChallenger;
-                    claimSearchStart = lastWarChallenger;
-                }
-                Act(() => true);
-            }
-
-            if (GUILayout.Button("Pass"))
-            {
-                if (warManager.TryContinueWarPhase())
-                {
-                    warWasStarted = false;
-                    preWarStep = PreWarStep.Claim;
-                    activeClaimant = -1;
-                    claimSearchStart = (lastWarChallenger + 1) % gameManager.Players.Count;
-
-                    if (FindFirstEligibleClaimant(claimSearchStart) < 0)
-                    {
-                        Act(() => warManager.TryFinishWarPhase());
-                        return;
-                    }
-                }
-                Act(() => true);
-            }
+            Act(() => warManager.TryFinishWarPhase());
             return;
+        }
+
+        GUILayout.Label($"Player {nextClaimant + 1}: declare War or pass");
+
+        if (GUILayout.Button("Declare War"))
+        {
+            bool advanced = warManager.TryContinueWarPhase();
+            bool claimed = advanced && warManager.TryClaimWar(nextClaimant);
+            if (claimed)
+            {
+                lastWarChallenger = nextClaimant;
+                warWasStarted = false;
+                preWarStep = PreWarStep.Target;
+                activeClaimant = nextClaimant;
+            }
+            Act(() => true);
         }
 
         if (GUILayout.Button("Pass"))
@@ -429,7 +421,8 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
                 warWasStarted = false;
                 preWarStep = PreWarStep.Claim;
                 activeClaimant = -1;
-                claimSearchStart = gameManager.StartingPlayerIndex;
+                claimSearchStart = (nextClaimant + 1) % gameManager.Players.Count;
+
                 if (FindFirstEligibleClaimant(claimSearchStart) < 0)
                 {
                     Act(() => warManager.TryFinishWarPhase());
