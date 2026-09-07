@@ -118,11 +118,6 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
                     choiceStage = 2;
                     choiceOverlay = true;
                 }
-                else if (capturedCard.data.cardType == CardType.Artist && capturedCard.data.rarity == CardRarity.Normal)
-                {
-                    choiceStage = 3;
-                    choiceOverlay = true;
-                }
                 else
                 {
                     ResetState();
@@ -146,8 +141,7 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
     private void DrawChoice(Rect panel, float width)
     {
         GUI.Box(panel, GUIContent.none, panelStyle);
-        string title = choiceStage == 1 ? "NOBLEMAN — CHOOSE SPECIAL" :
-            choiceStage == 2 ? "BODYGUARD — CHOOSE DIE" : "ARTIST — CHOOSE DIE";
+        string title = choiceStage == 1 ? "NOBLEMAN — CHOOSE SPECIAL" : "BODYGUARD — CHOOSE DIE";
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), title, titleStyle);
         if (selectedActor == null || selectedCard == null)
         {
@@ -158,7 +152,7 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
         if (choiceStage == 1)
         {
             DrawChoiceButton(panel, 25, 120, 175, 70, "ARTIST SPECIAL", () => ChooseNoblemanSpecial(CardType.Artist));
-            DrawChoiceButton(panel, 215, 120, 175, 70, "SOLDIER SPECIAL", () => ChooseNoblemanSpecial(CardType.Soldier));
+            DrawChoiceButton(panel, 215, 120, 175, 70, "SOLDIER SPECIAL", () => ChooseNoblemanSpecial(CardType.Knight));
             DrawChoiceButton(panel, 405, 120, 175, 70, "COLLECTOR SPECIAL", () => ChooseNoblemanSpecial(CardType.Collector));
             DrawChoiceButton(panel, 595, 120, 175, 70, "BODYGUARD SPECIAL", () => ChooseNoblemanSpecial(CardType.Bodyguard));
             return;
@@ -171,17 +165,7 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
             string label = $"DIE {capturedIndex + 1}\n{selectedActor.Dice[capturedIndex]}";
             if (GUI.Button(new Rect(panel.x + 30 + capturedIndex * 125, panel.y + 120, 110, 70), label, buttonStyle))
             {
-                bool accepted;
-                if (choiceStage == 2)
-                {
-                    accepted = warManager.TryChooseWarBodyguardDie(capturedIndex);
-                }
-                else
-                {
-                    accepted = resolveNoblemanArtistDie != null &&
-                        (bool)resolveNoblemanArtistDie.Invoke(warManager, new object[] { capturedIndex });
-                }
-
+                bool accepted = warManager.TryChooseWarBodyguardDie(capturedIndex);
                 if (accepted)
                 {
                     Debug.Log($"[Cardado][War] CARD RESOLVED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} [{selectedCard.data.cardType}].");
@@ -199,12 +183,14 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
 
         if (type == CardType.Artist)
         {
-            choiceStage = 3;
-            choiceOverlay = true;
+            // The current WarManager keeps Nobleman/Artist's die choice internal.
+            // The old War UI is allowed to resume for this specific follow-up.
+            Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} chose Artist Special.");
+            ResetState();
             return;
         }
 
-        Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} [{selectedCard.data.cardType}] chose {type} Special.");
+        Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} chose {type} Special.");
         ResetState();
     }
 
