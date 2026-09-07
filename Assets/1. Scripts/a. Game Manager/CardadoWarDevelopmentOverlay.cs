@@ -92,7 +92,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         int challenger = FindFirstEligibleClaimant(claimSearchStart);
         if (challenger < 0)
         {
-            Act(() => warManager.TryFinishWarPhase());
+            warManager.TryFinishWarPhase();
             return;
         }
 
@@ -399,7 +399,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
 
         if (nextClaimant < 0)
         {
-            Act(() => warManager.TryFinishWarPhase());
+            warManager.TryFinishWarPhase();
             return;
         }
 
@@ -432,7 +432,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
 
                 if (FindFirstEligibleClaimant(claimSearchStart) < 0)
                 {
-                    Act(() => warManager.TryFinishWarPhase());
+                    warManager.TryFinishWarPhase();
                     return;
                 }
             }
