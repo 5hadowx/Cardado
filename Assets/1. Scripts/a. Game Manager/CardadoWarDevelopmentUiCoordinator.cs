@@ -1,9 +1,10 @@
 using UnityEngine;
 
 /// <summary>
-/// During War hands the dedicated War manager owns card/die presentation and
-/// the normal development card-action overlay is disabled so it cannot mutate
-/// match-wide state from inside the temporary 1v1 context.
+/// Keeps the normal development card-action overlay disabled for the entire
+/// WarResolution phase. War owns its own card/die presentation and the normal
+/// overlay must not expose or mutate match-wide state while War is active or
+/// showing its completion screen.
 /// </summary>
 public class CardadoWarDevelopmentUiCoordinator : MonoBehaviour
 {
@@ -30,8 +31,8 @@ public class CardadoWarDevelopmentUiCoordinator : MonoBehaviour
         RefreshReferences();
         if (gameManager == null || warManager == null) return;
 
-        bool warPlaying = gameManager.Phase == CardadoGamePhase.WarResolution && warManager.WarInProgress;
-        if (cardOverlay != null) cardOverlay.enabled = !warPlaying;
+        bool warPhase = gameManager.Phase == CardadoGamePhase.WarResolution;
+        if (cardOverlay != null) cardOverlay.enabled = !warPhase;
     }
 
     private void OnDisable()
