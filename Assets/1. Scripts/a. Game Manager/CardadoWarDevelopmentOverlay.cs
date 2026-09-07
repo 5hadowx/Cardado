@@ -46,7 +46,15 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
     private void DrawPreWar()
     {
         int challenger = warManager.CurrentWarClaimantIndex;
-        if (challenger < 0) return;
+        if (challenger < 0) challenger = FindFirstEligibleClaimant();
+
+        if (challenger < 0)
+        {
+            GUILayout.Label("No eligible War claimant.");
+            if (GUILayout.Button("Finish War phase")) Act(() => warManager.TryFinishWarPhase());
+            return;
+        }
+
         GUILayout.Label($"Player {challenger + 1}: claim or pass");
         if (warManager.CanClaimWar(challenger) && GUILayout.Button("Declare War")) Act(() => warManager.TryClaimWar(challenger));
         if (GUILayout.Button("Pass")) Act(() => warManager.TryPassWar(challenger));
@@ -64,6 +72,19 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         if (GUILayout.Button("Target plays first")) Act(() => warManager.TryChooseWarOrder(false));
     }
 
+    private int FindFirstEligibleClaimant()
+    {
+        if (gameManager == null || gameManager.Players.Count == 0) return -1;
+        int start = gameManager.StartingPlayerIndex;
+        if (start < 0) start = 0;
+        for (int offset = 0; offset < gameManager.Players.Count; offset++)
+        {
+            int playerIndex = (start + offset) % gameManager.Players.Count;
+            if (warManager.CanClaimWar(playerIndex)) return playerIndex;
+        }
+        return -1;
+    }
+
     private void DrawWarDice()
     {
         var current = warManager.Context.CurrentPlayer;
@@ -79,7 +100,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
 
     private void DrawWarComplete()
     {
-        if (warManager.Context.Challenger != null && warManager.CanClaimWar(warManager.Context.Challenger.PlayerIndex) &&
+        if (warManager.Context != null && warManager.Context.Challenger != null && warManager.CanClaimWar(warManager.Context.Challenger.PlayerIndex) &&
             GUILayout.Button("Declare another War"))
             Act(() => warManager.TryDeclareAnotherWar(warManager.Context.Challenger.PlayerIndex));
         if (GUILayout.Button("Continue to next claimant")) Act(() => warManager.TryContinueWarPhase());
