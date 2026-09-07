@@ -2,12 +2,24 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Isolated mutable state for one active War. It intentionally does not expose
-/// CardadoGameManager.Players, so War card effects can never target unrelated
-/// match participants through the War state itself.
+/// Isolated mutable state for one active War. The two participant PlayerState
+/// objects can be temporarily bound to these collections so existing gameplay
+/// code reads/writes War state without exposing the normal match collections.
 /// </summary>
 public sealed class CardadoWarContext
 {
+    public enum EffectType { Modifier, BodyguardDie, BodyguardPlayer, BodyguardHand }
+
+    public sealed class Effect
+    {
+        public EffectType Type { get; internal set; }
+        public CardInstance Card { get; internal set; }
+        public int OwnerIndex { get; internal set; }
+        public int TargetIndex { get; internal set; } = -1;
+        public int DieIndex { get; internal set; } = -1;
+        public int OriginalValue { get; internal set; }
+    }
+
     public sealed class Participant
     {
         private readonly List<CardInstance> cards = new List<CardInstance>();
@@ -33,6 +45,32 @@ public sealed class CardadoWarContext
         internal List<bool> MutablePlayedDice => playedDice;
     }
 
+    public sealed class Binding
+    {
+        private readonly CardadoPlayerState player;
+        private readonly List<CardInstance> originalCards;
+        private readonly List<int> originalDice;
+        private readonly List<bool> originalPlayedDice;
+        private bool restored;
+
+        internal Binding(CardadoPlayerState player)
+        {
+            this.player = player;
+            originalCards = player.hand.cardsInHand;
+            originalDice = player.dice;
+            originalPlayedDice = player.playedDice;
+        }
+
+        public void Restore()
+        {
+            if (restored) return;
+            player.hand.cardsInHand = originalCards;
+            player.dice = originalDice;
+            player.playedDice = originalPlayedDice;
+            restored = true;
+        }
+    }
+
     public Participant Challenger { get; }
     public Participant Target { get; }
     public int Wager { get; internal set; }
@@ -40,8 +78,32 @@ public sealed class CardadoWarContext
     public int CurrentTurnSlot { get; internal set; }
     public int ChallengerHandsWon { get; internal set; }
     public int TargetHandsWon { get; internal set; }
+    public bool WarCardPlayedByChallenger { get; internal set; }
+    public bool WarCardPlayedByTarget { get; internal set; }
 
+    private readonly List<Effect> effects = new List<Effect>();
+    private readonly HashSet<int> blockedPlayers = new HashSet<int>();
+
+    public IReadOnlyList<Effect> Effects => effects;
     public Participant CurrentPlayer => CurrentTurnSlot == 0 ? Challenger : Target;
+
+    private CardadoWarContext(Participant challenger, Participant target)
+    {
+        Challenger = challenger;
+        Target = target;
+        HandNumber = 1;
+    }
+
+    public static CardadoWarContext Create(int challengerIndex, string challengerId, int challengerChips,
+        int targetIndex, string targetId, int targetChips)
+    {
+        if (challengerIndex < 0 || targetIndex < 0 || challengerIndex == targetIndex)
+            throw new ArgumentException("A War requires two distinct valid participants.");
+
+        return new CardadoWarContext(
+            new Participant(challengerIndex, challengerId, challengerChips),
+            new Participant(targetIndex, targetId, targetChips));
+    }
 
     public Participant OpponentOf(Participant player)
     {
@@ -60,22 +122,18 @@ public sealed class CardadoWarContext
         return null;
     }
 
-    public static CardadoWarContext Create(int challengerIndex, string challengerId, int challengerChips,
-        int targetIndex, string targetId, int targetChips)
+    public Binding Bind(CardadoPlayerState player, Participant participant)
     {
-        if (challengerIndex < 0 || targetIndex < 0 || challengerIndex == targetIndex)
-            throw new ArgumentException("A War requires two distinct valid participants.");
+        if (player == null || participant == null)
+            throw new ArgumentNullException();
+        if (player.playerId != participant.PlayerId)
+            throw new InvalidOperationException("War participant does not match the PlayerState being bound.");
 
-        return new CardadoWarContext(
-            new Participant(challengerIndex, challengerId, challengerChips),
-            new Participant(targetIndex, targetId, targetChips));
-    }
-
-    private CardadoWarContext(Participant challenger, Participant target)
-    {
-        Challenger = challenger;
-        Target = target;
-        HandNumber = 1;
+        Binding binding = new Binding(player);
+        player.hand.cardsInHand = participant.MutableCards;
+        player.dice = participant.MutableDice;
+        player.playedDice = participant.MutablePlayedDice;
+        return binding;
     }
 
     internal void CopyCardsFrom(IEnumerable<CardInstance> source, Participant destination)
@@ -90,8 +148,7 @@ public sealed class CardadoWarContext
         if (card != null) participant.MutableCards.Add(card);
     }
 
-    internal bool RemoveCard(Participant participant, CardInstance card) =>
-        participant.MutableCards.Remove(card);
+    internal bool RemoveCard(Participant participant, CardInstance card) => participant.MutableCards.Remove(card);
 
     internal void ClearDice(Participant participant)
     {
@@ -113,8 +170,7 @@ public sealed class CardadoWarContext
     internal bool IsDieTargetable(Participant participant, int dieIndex) =>
         dieIndex >= 0 && dieIndex < participant.MutableDice.Count && participant.MutableDice[dieIndex] > 0;
 
-    internal void MarkDiePlayed(Participant participant, int dieIndex) =>
-        participant.MutablePlayedDice[dieIndex] = true;
+    internal void MarkDiePlayed(Participant participant, int dieIndex) => participant.MutablePlayedDice[dieIndex] = true;
 
     internal int GetDieValue(Participant participant, int dieIndex) =>
         IsDieTargetable(participant, dieIndex) ? participant.MutableDice[dieIndex] : 0;
@@ -124,5 +180,48 @@ public sealed class CardadoWarContext
         if (!IsDieTargetable(participant, dieIndex))
             throw new ArgumentOutOfRangeException(nameof(dieIndex));
         participant.MutableDice[dieIndex] = value;
+    }
+
+    internal bool HasPlayedCard(Participant participant) =>
+        ReferenceEquals(participant, Challenger) ? WarCardPlayedByChallenger : WarCardPlayedByTarget;
+
+    internal void MarkCardPlayed(Participant participant)
+    {
+        if (ReferenceEquals(participant, Challenger)) WarCardPlayedByChallenger = true;
+        else if (ReferenceEquals(participant, Target)) WarCardPlayedByTarget = true;
+    }
+
+    internal bool IsBlocked(Participant participant) => blockedPlayers.Contains(participant.PlayerIndex);
+    internal void Block(Participant participant) => blockedPlayers.Add(participant.PlayerIndex);
+
+    internal Effect AddEffect(EffectType type, CardInstance card, Participant owner, Participant target = null,
+        int dieIndex = -1, int originalValue = 0)
+    {
+        Effect effect = new Effect
+        {
+            Type = type,
+            Card = card,
+            OwnerIndex = owner.PlayerIndex,
+            TargetIndex = target == null ? -1 : target.PlayerIndex,
+            DieIndex = dieIndex,
+            OriginalValue = originalValue
+        };
+        effects.Add(effect);
+        return effect;
+    }
+
+    internal void RemoveEffect(Effect effect)
+    {
+        if (effect != null) effects.Remove(effect);
+    }
+
+    internal void ClearHandScopedEffects()
+    {
+        for (int i = effects.Count - 1; i >= 0; i--)
+            if (effects[i].Type == EffectType.BodyguardDie || effects[i].Type == EffectType.BodyguardHand)
+                effects.RemoveAt(i);
+        blockedPlayers.Clear();
+        WarCardPlayedByChallenger = false;
+        WarCardPlayedByTarget = false;
     }
 }
