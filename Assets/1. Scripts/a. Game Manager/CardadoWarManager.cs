@@ -371,20 +371,20 @@ public class CardadoWarManager : MonoBehaviour
 
     private void Reroll(CardadoWarContext.Participant participant, int dieIndex, int times)
     {
-        if (participant == null || dieIndex < 0 || !IsDieTargetable(participant.PlayerIndex, dieIndex)) return;
+        if (participant == null || dieIndex < 0 || !warContext.IsDieTargetable(participant, dieIndex)) return;
         for (int i = 0; i < times; i++) participant.MutableDice[dieIndex] = UnityEngine.Random.Range(1, 7);
     }
 
     private void RerollAll(CardadoWarContext.Participant participant)
     {
         for (int i = 0; i < participant.MutableDice.Count; i++)
-            if (IsDieTargetable(participant.PlayerIndex, i)) participant.MutableDice[i] = UnityEngine.Random.Range(1, 7);
+            if (warContext.IsDieTargetable(participant, i)) participant.MutableDice[i] = UnityEngine.Random.Range(1, 7);
     }
 
     private void Exchange(CardadoWarContext.Participant a, int ad, CardadoWarContext.Participant b, int bd)
     {
         if (a == null || b == null || ad < 0 || bd < 0) return;
-        if (!IsDieTargetable(a.PlayerIndex, ad) || !IsDieTargetable(b.PlayerIndex, bd)) return;
+        if (!warContext.IsDieTargetable(a, ad) || !warContext.IsDieTargetable(b, bd)) return;
         int value = a.MutableDice[ad];
         a.MutableDice[ad] = b.MutableDice[bd];
         b.MutableDice[bd] = value;
@@ -392,7 +392,7 @@ public class CardadoWarManager : MonoBehaviour
 
     private void Flip(CardadoWarContext.Participant participant, int dieIndex)
     {
-        if (participant == null || dieIndex < 0 || !IsDieTargetable(participant.PlayerIndex, dieIndex)) return;
+        if (participant == null || dieIndex < 0 || !warContext.IsDieTargetable(participant, dieIndex)) return;
         participant.MutableDice[dieIndex] = 7 - participant.MutableDice[dieIndex];
     }
 
