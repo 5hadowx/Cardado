@@ -424,16 +424,20 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         {
             if (warManager.TryContinueWarPhase())
             {
-                processedClaimants.Add(nextClaimant);
-                warWasStarted = false;
-                preWarStep = PreWarStep.Claim;
-                activeClaimant = -1;
-                claimSearchStart = (nextClaimant + 1) % gameManager.Players.Count;
-
-                if (FindFirstEligibleClaimant(claimSearchStart) < 0)
+                bool passed = warManager.TryPassWar(nextClaimant);
+                if (passed)
                 {
-                    warManager.TryFinishWarPhase();
-                    return;
+                    processedClaimants.Add(nextClaimant);
+                    warWasStarted = false;
+                    preWarStep = PreWarStep.Claim;
+                    activeClaimant = -1;
+                    claimSearchStart = (nextClaimant + 1) % gameManager.Players.Count;
+
+                    if (FindFirstEligibleClaimant(claimSearchStart) < 0)
+                    {
+                        warManager.TryFinishWarPhase();
+                        return;
+                    }
                 }
             }
             Act(() => true);
