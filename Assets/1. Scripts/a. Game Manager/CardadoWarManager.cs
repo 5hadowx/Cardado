@@ -118,6 +118,7 @@ public class CardadoWarManager : MonoBehaviour
 
     private void OnEnable()
     {
+        if (gameManager == null) gameManager = FindFirstObjectByType<CardadoGameManager>();
         if (gameManager != null) gameManager.PhaseChanged += OnPhaseChanged;
     }
 
@@ -129,8 +130,7 @@ public class CardadoWarManager : MonoBehaviour
 
     private void Start()
     {
-        if (gameManager != null && gameManager.Phase == CardadoGamePhase.WarResolution)
-            BeginWarPhase();
+        EnsureWarPhaseInitialized();
     }
 
     private void OnPhaseChanged(CardadoGamePhase phase)
