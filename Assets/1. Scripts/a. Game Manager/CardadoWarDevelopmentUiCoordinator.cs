@@ -1,25 +1,20 @@
-using System.Reflection;
 using UnityEngine;
 
 /// <summary>
-/// Coordinates the temporary War IMGUI with the card-action development overlay.
-/// During actual War hands the card-action overlay owns the interactive card/die
-/// presentation, so the War manager's duplicate dice panel is hidden.
+/// During War hands the dedicated War manager owns card/die presentation and
+/// the normal development card-action overlay is disabled so it cannot mutate
+/// match-wide state from inside the temporary 1v1 context.
 /// </summary>
 public class CardadoWarDevelopmentUiCoordinator : MonoBehaviour
 {
     private CardadoGameManager gameManager;
     private CardadoWarManager warManager;
-    private FieldInfo uiStepField;
-    private FieldInfo showTemporaryUiField;
-    private object lastUiStep;
+    private CardadoCardActionDevelopmentOverlayV2 cardOverlay;
 
     [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
     private static void Install()
     {
-        if (FindFirstObjectByType<CardadoWarDevelopmentUiCoordinator>() != null)
-            return;
-
+        if (FindFirstObjectByType<CardadoWarDevelopmentUiCoordinator>() != null) return;
         GameObject host = new GameObject("Cardado War Development UI Coordinator");
         DontDestroyOnLoad(host);
         host.AddComponent<CardadoWarDevelopmentUiCoordinator>();
@@ -27,55 +22,27 @@ public class CardadoWarDevelopmentUiCoordinator : MonoBehaviour
 
     private void Awake()
     {
-        gameManager = FindFirstObjectByType<CardadoGameManager>();
-        warManager = FindFirstObjectByType<CardadoWarManager>();
-        if (warManager == null)
-            return;
-
-        BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        uiStepField = typeof(CardadoWarManager).GetField("uiStep", flags);
-        showTemporaryUiField = typeof(CardadoWarManager).GetField("showTemporaryUi", flags);
+        RefreshReferences();
     }
 
     private void LateUpdate()
     {
-        if (gameManager == null)
-            gameManager = FindFirstObjectByType<CardadoGameManager>();
-        if (warManager == null)
-            warManager = FindFirstObjectByType<CardadoWarManager>();
-        if (warManager != null && (uiStepField == null || showTemporaryUiField == null))
-        {
-            BindingFlags flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            uiStepField = typeof(CardadoWarManager).GetField("uiStep", flags);
-            showTemporaryUiField = typeof(CardadoWarManager).GetField("showTemporaryUi", flags);
-        }
+        RefreshReferences();
+        if (gameManager == null || warManager == null) return;
 
-        if (gameManager == null || warManager == null || showTemporaryUiField == null || uiStepField == null)
-            return;
-
-        if (gameManager.Phase != CardadoGamePhase.WarResolution)
-        {
-            SetWarUiVisible(true);
-            return;
-        }
-
-        object currentUiStep = uiStepField.GetValue(warManager);
-        if (!Equals(currentUiStep, lastUiStep))
-        {
-            lastUiStep = currentUiStep;
-            bool isPlaying = currentUiStep != null && currentUiStep.ToString() == "Playing";
-            SetWarUiVisible(!isPlaying);
-        }
+        bool warPlaying = gameManager.Phase == CardadoGamePhase.WarResolution && warManager.WarInProgress;
+        if (cardOverlay != null) cardOverlay.enabled = !warPlaying;
     }
 
     private void OnDisable()
     {
-        SetWarUiVisible(true);
+        if (cardOverlay != null) cardOverlay.enabled = true;
     }
 
-    private void SetWarUiVisible(bool visible)
+    private void RefreshReferences()
     {
-        if (warManager != null && showTemporaryUiField != null)
-            showTemporaryUiField.SetValue(warManager, visible);
+        if (gameManager == null) gameManager = FindFirstObjectByType<CardadoGameManager>();
+        if (warManager == null) warManager = FindFirstObjectByType<CardadoWarManager>();
+        if (cardOverlay == null) cardOverlay = FindFirstObjectByType<CardadoCardActionDevelopmentOverlayV2>();
     }
 }
