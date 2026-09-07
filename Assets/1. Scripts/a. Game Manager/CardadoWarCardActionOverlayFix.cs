@@ -8,9 +8,9 @@ using UnityEngine;
 /// and exits the IMGUI pass immediately after an action to prevent list mutation
 /// from changing the card represented by a button.
 ///
-/// The WarManager remains authoritative; this component only submits War actions.
-/// The one private-method bridge is limited to the existing Nobleman/Artist follow-up
-/// because the current WarManager exposes that action only through its internal rule path.
+/// The WarManager remains authoritative; the private-method bridge is limited to
+/// the existing Nobleman/Artist follow-up because the current WarManager exposes
+/// that action only through its internal rule path.
 /// </summary>
 public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
 {
@@ -141,7 +141,8 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
     private void DrawChoice(Rect panel, float width)
     {
         GUI.Box(panel, GUIContent.none, panelStyle);
-        string title = choiceStage == 1 ? "NOBLEMAN — CHOOSE SPECIAL" : "BODYGUARD — CHOOSE DIE";
+        string title = choiceStage == 1 ? "NOBLEMAN — CHOOSE SPECIAL" :
+            choiceStage == 2 ? "BODYGUARD — CHOOSE DIE" : "NOBLEMAN / ARTIST — CHOOSE DIE";
         GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), title, titleStyle);
         if (selectedActor == null || selectedCard == null)
         {
@@ -165,7 +166,17 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
             string label = $"DIE {capturedIndex + 1}\n{selectedActor.Dice[capturedIndex]}";
             if (GUI.Button(new Rect(panel.x + 30 + capturedIndex * 125, panel.y + 120, 110, 70), label, buttonStyle))
             {
-                bool accepted = warManager.TryChooseWarBodyguardDie(capturedIndex);
+                bool accepted;
+                if (choiceStage == 2)
+                {
+                    accepted = warManager.TryChooseWarBodyguardDie(capturedIndex);
+                }
+                else
+                {
+                    accepted = resolveNoblemanArtistDie != null &&
+                        (bool)resolveNoblemanArtistDie.Invoke(warManager, new object[] { capturedIndex });
+                }
+
                 if (accepted)
                 {
                     Debug.Log($"[Cardado][War] CARD RESOLVED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} [{selectedCard.data.cardType}].");
@@ -183,14 +194,12 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
 
         if (type == CardType.Artist)
         {
-            // The current WarManager keeps Nobleman/Artist's die choice internal.
-            // The old War UI is allowed to resume for this specific follow-up.
-            Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} chose Artist Special.");
-            ResetState();
+            choiceStage = 3;
+            choiceOverlay = true;
             return;
         }
 
-        Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} chose {type} Special.");
+        Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} [{selectedCard.data.cardType}] chose {type} Special.");
         ResetState();
     }
 
