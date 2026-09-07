@@ -70,6 +70,8 @@ public class CardadoGameManager : MonoBehaviour
         if (cardActionManager == null) cardActionManager = gameObject.AddComponent<CardadoCardActionManager>();
         warManager = GetComponent<CardadoWarManager>();
         if (warManager == null) warManager = gameObject.AddComponent<CardadoWarManager>();
+        warManager.enabled = false;
+        warManager.enabled = true;
         if (GetComponent<CardadoCardActionDevelopmentOverlay>() == null) gameObject.AddComponent<CardadoCardActionDevelopmentOverlay>();
     }
 
