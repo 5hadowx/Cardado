@@ -84,8 +84,7 @@ public sealed class CardadoWarContext
         throw new ArgumentException("The supplied player is not part of this War.", nameof(player));
     }
 
-    public bool ContainsPlayer(int playerIndex) =>
-        Challenger.PlayerIndex == playerIndex || Target.PlayerIndex == playerIndex;
+    public bool ContainsPlayer(int playerIndex) => Challenger.PlayerIndex == playerIndex || Target.PlayerIndex == playerIndex;
 
     public Participant GetParticipant(int playerIndex)
     {
@@ -94,11 +93,7 @@ public sealed class CardadoWarContext
         return null;
     }
 
-    internal void AddCard(Participant participant, CardInstance card)
-    {
-        if (card != null) participant.MutableCards.Add(card);
-    }
-
+    internal void AddCard(Participant participant, CardInstance card) { if (card != null) participant.MutableCards.Add(card); }
     internal bool RemoveCard(Participant participant, CardInstance card) => participant.MutableCards.Remove(card);
 
     internal void AddDie(Participant participant, int value)
@@ -107,13 +102,13 @@ public sealed class CardadoWarContext
         participant.MutablePlayedDice.Add(false);
     }
 
+    // Cardado permits a modifier to produce 0 or 7. A die remains playable/targetable
+    // until it is actually played; numeric value is not an availability flag.
     internal bool IsDieAvailable(Participant participant, int dieIndex) =>
         dieIndex >= 0 && dieIndex < participant.MutableDice.Count &&
-        dieIndex < participant.MutablePlayedDice.Count &&
-        !participant.MutablePlayedDice[dieIndex] && participant.MutableDice[dieIndex] > 0;
+        dieIndex < participant.MutablePlayedDice.Count && !participant.MutablePlayedDice[dieIndex];
 
-    internal bool IsDieTargetable(Participant participant, int dieIndex) =>
-        dieIndex >= 0 && dieIndex < participant.MutableDice.Count && participant.MutableDice[dieIndex] > 0;
+    internal bool IsDieTargetable(Participant participant, int dieIndex) => IsDieAvailable(participant, dieIndex);
 
     internal bool HasPlayedCard(Participant participant) =>
         ReferenceEquals(participant, Challenger) ? WarCardPlayedByChallenger : WarCardPlayedByTarget;
@@ -143,16 +138,12 @@ public sealed class CardadoWarContext
         return effect;
     }
 
-    internal void RemoveEffect(Effect effect)
-    {
-        if (effect != null) effects.Remove(effect);
-    }
+    internal void RemoveEffect(Effect effect) { if (effect != null) effects.Remove(effect); }
 
     internal void ClearHandScopedEffects()
     {
         for (int i = effects.Count - 1; i >= 0; i--)
-            if (effects[i].Type == EffectType.BodyguardDie || effects[i].Type == EffectType.BodyguardHand)
-                effects.RemoveAt(i);
+            if (effects[i].Type == EffectType.BodyguardDie) effects.RemoveAt(i);
         blockedPlayers.Clear();
         WarCardPlayedByChallenger = false;
         WarCardPlayedByTarget = false;
