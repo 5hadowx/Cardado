@@ -151,10 +151,10 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
                 DrawModifierSign(panel, card);
                 break;
             case CardadoWarPendingChoice.ArtistDie:
-                DrawSingleParticipantDieChoice(panel, actor, false, warManager.TryChooseArtistDie);
+                DrawSingleParticipantDieChoice(panel, actor, true, warManager.TryChooseArtistDie);
                 break;
             case CardadoWarPendingChoice.KnightDie:
-                DrawSingleParticipantDieChoice(panel, context.OpponentOf(actor), false, warManager.TryChooseKnightDie);
+                DrawSingleParticipantDieChoice(panel, context.OpponentOf(actor), true, warManager.TryChooseKnightDie);
                 break;
             case CardadoWarPendingChoice.CollectorOpponentCard:
                 DrawOpponentCardSlots(panel, actor, "Choose one hidden opponent card", (index) => warManager.TryChooseCollectorCard(index));
@@ -172,7 +172,7 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
                 DrawJokerTarget(panel);
                 break;
             case CardadoWarPendingChoice.JokerDie:
-                DrawSingleParticipantDieChoice(panel, warManager.Context.OpponentOf(actor) == warManager.PendingChoiceActor ? actor : GetJokerTarget(actor), true, warManager.TryChooseJokerDie);
+                DrawJokerDieChoice(panel, context, actor);
                 break;
             case CardadoWarPendingChoice.SpecialArtistMode:
                 DrawSpecialArtistMode(panel);
@@ -219,14 +219,6 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
         }
     }
 
-    private CardadoWarContext.Participant GetJokerTarget(CardadoWarContext.Participant actor)
-    {
-        // The manager owns the selected target; the UI can infer it from the pending target by
-        // checking which participant is currently targetable after the choice. This fallback keeps
-        // the presentation side-effect free. The manager validates the final die request.
-        return actor;
-    }
-
     private string DescribePendingChoice()
     {
         switch (warManager.PendingChoice)
@@ -261,14 +253,14 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
 
     private void DrawModifierTarget(Rect panel, CardadoWarContext.Participant actor)
     {
-        DrawSingleParticipantDieChoice(panel, actor, true, (index) => warManager.TryChooseModifierDie(actor.PlayerIndex, index));
-        float y = panel.y + 360;
-        DrawSingleParticipantDieChoiceAt(panel, contextOpponent(actor), y, true, (index) => warManager.TryChooseModifierDie(contextOpponent(actor).PlayerIndex, index));
+        CardadoWarContext.Participant opponent = warManager.Context.OpponentOf(actor);
+        DrawSingleParticipantDieChoiceAt(panel, actor, panel.y + 205, true,
+            (index) => warManager.TryChooseModifierDie(actor.PlayerIndex, index));
+        DrawSingleParticipantDieChoiceAt(panel, opponent, panel.y + 350, true,
+            (index) => warManager.TryChooseModifierDie(opponent.PlayerIndex, index));
     }
 
-    private CardadoWarContext.Participant contextOpponent(CardadoWarContext.Participant actor) => warManager.Context.OpponentOf(actor);
-
-    private void DrawModifierSign(Rect panel, CardData card)
+    private void DrawModifierSign(Rect panel, CardInstance card)
     {
         float x = panel.x + 160;
         if (card.data.canAdd && GUI.Button(new Rect(x, panel.y + 210, 250, 70), "+1", buttonStyle))
@@ -291,6 +283,7 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
     private void DrawSingleParticipantDieChoiceAt(Rect panel, CardadoWarContext.Participant participant, float y, bool targetable, System.Func<int, bool> action)
     {
         if (participant == null) return;
+        GUI.Label(new Rect(panel.x + 35, y - 35, 700, 25), participant.PlayerId, GUI.skin.label);
         float x = panel.x + 40;
         for (int i = 0; i < participant.Dice.Count; i++)
         {
@@ -303,6 +296,14 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
             }
             x += 135;
         }
+    }
+
+    private void DrawJokerDieChoice(Rect panel, CardadoWarContext context, CardadoWarContext.Participant actor)
+    {
+        CardadoWarContext.Participant opponent = context.OpponentOf(actor);
+        GUI.Label(new Rect(panel.x + 35, panel.y + 165, 800, 25), "Only the previously selected target's buttons will be accepted.", GUI.skin.label);
+        DrawSingleParticipantDieChoiceAt(panel, actor, panel.y + 205, true, (index) => warManager.TryChooseJokerDie(index));
+        DrawSingleParticipantDieChoiceAt(panel, opponent, panel.y + 350, true, (index) => warManager.TryChooseJokerDie(index));
     }
 
     private void DrawOpponentCardSlots(Rect panel, CardadoWarContext.Participant actor, string label, System.Func<int, bool> action)
