@@ -1,153 +1,139 @@
 using System.Collections.Generic;
 
 /// <summary>
-/// Rules shared by the War claim system and the War card layer.
-/// War uses the card definitions already present in CardData/CardInstance.
-///
-/// This class deliberately contains only rules that are explicitly defined for
-/// War. It does not invent War-specific effects where the rules document does
-/// not define a different effect from normal play.
+/// Rules used only to determine whether a player's cards allow a War declaration.
+/// Royalty is a standalone claim. Special cards count as two card-equivalents.
+/// Mirror and Executioner are black wildcards and can represent any symbol.
 /// </summary>
 public static class CardadoWarCardRules
 {
-    /// <summary>
-    /// Returns the War value of one physical card when counting card value.
-    /// Special cards count double; all other cards count as one.
-    /// </summary>
     public static int GetWarValue(CardInstance card)
     {
-        if (card == null || card.data == null)
-            return 0;
-
+        if (card == null || card.data == null) return 0;
         return card.data.rarity == CardRarity.Special ? 2 : 1;
     }
 
-    /// <summary>
-    /// Mirror and Executioner are black wildcards and may represent any symbol
-    /// when constructing a three-card War claim.
-    /// </summary>
     public static bool IsBlackWildcard(CardInstance card)
     {
-        if (card == null || card.data == null)
-            return false;
-
-        return card.data.cardType == CardType.Mirror ||
-               card.data.cardType == CardType.Executioner;
+        return card != null && card.data != null &&
+               (card.data.cardType == CardType.Mirror || card.data.cardType == CardType.Executioner);
     }
 
-    public static bool IsBlackWildcard(CardType type)
+    public static bool IsRoyalty(CardInstance card)
     {
-        return type == CardType.Mirror || type == CardType.Executioner;
+        if (card == null || card.data == null) return false;
+        return card.data.cardType == CardType.King ||
+               card.data.cardType == CardType.Queen ||
+               card.data.cardType == CardType.GordonRobleys;
     }
+
+    public static bool HasValidClaim(List<CardInstance> cards) => FindOptimalClaim(cards) != null;
 
     /// <summary>
-    /// Checks whether the player's remaining cards contain a valid War claim.
-    /// A standalone King, Queen or Gordon Robleys is a valid claim. Otherwise
-    /// the player needs a combination equivalent to three cards.
+    /// Returns the smallest valid subset for one War claim.
+    /// Priority: standalone royalty, then two-card special+normal combinations,
+    /// then three physical cards forming three equal or three different symbols,
+    /// with black wildcards filling missing symbols.
     /// </summary>
-    public static bool HasValidClaim(List<CardInstance> cards)
+    public static List<CardInstance> FindOptimalClaim(List<CardInstance> cards)
     {
-        if (cards == null || cards.Count == 0)
+        if (cards == null || cards.Count == 0) return null;
+
+        for (int i = 0; i < cards.Count; i++)
+            if (IsRoyalty(cards[i])) return new List<CardInstance> { cards[i] };
+
+        // A special card counts as two. A special card plus one normal card is
+        // sufficient only when the normal card matches its symbol, or when the
+        // special card itself is a black wildcard.
+        for (int i = 0; i < cards.Count; i++)
+        {
+            CardInstance special = cards[i];
+            if (special == null || special.data == null || special.data.rarity != CardRarity.Special) continue;
+
+            for (int j = 0; j < cards.Count; j++)
+            {
+                if (i == j) continue;
+                CardInstance normal = cards[j];
+                if (normal == null || normal.data == null || normal.data.rarity == CardRarity.Special) continue;
+                if (IsBlackWildcard(special) || IsBlackWildcard(normal) || special.data.cardType == normal.data.cardType)
+                    return new List<CardInstance> { special, normal };
+            }
+        }
+
+        if (cards.Count >= 3)
+        {
+            for (int i = 0; i < cards.Count; i++)
+            {
+                for (int j = i + 1; j < cards.Count; j++)
+                {
+                    for (int k = j + 1; k < cards.Count; k++)
+                    {
+                        if (IsValidThreeCardCombination(cards[i], cards[j], cards[k]))
+                            return new List<CardInstance> { cards[i], cards[j], cards[k] };
+                    }
+                }
+            }
+        }
+
+        return null;
+    }
+
+    public static bool IsValidThreeCardCombination(CardInstance a, CardInstance b, CardInstance c)
+    {
+        if (a == null || b == null || c == null || a.data == null || b.data == null || c.data == null)
             return false;
+
+        CardInstance[] cards = { a, b, c };
+        int nonWildcardCount = 0;
+        CardType firstType = default(CardType);
+        bool hasFirstType = false;
+        bool allSame = true;
 
         foreach (CardInstance card in cards)
         {
-            if (card == null || card.data == null)
-                continue;
-
-            if (card.data.cardType == CardType.King ||
-                card.data.cardType == CardType.Queen ||
-                card.data.cardType == CardType.GordonRobleys)
-                return true;
-        }
-
-        // Two matching symbols can satisfy a three-card claim when one of the
-        // two cards is Special (2 + 1 = 3).
-        for (int i = 0; i < cards.Count; i++)
-        {
-            for (int j = i + 1; j < cards.Count; j++)
+            if (IsBlackWildcard(card)) continue;
+            nonWildcardCount++;
+            if (!hasFirstType)
             {
-                CardInstance a = cards[i];
-                CardInstance b = cards[j];
-                if (a == null || b == null || a.data == null || b.data == null)
-                    continue;
-
-                if (a.data.cardType == b.data.cardType &&
-                    (a.data.rarity == CardRarity.Special || b.data.rarity == CardRarity.Special))
-                    return true;
+                firstType = card.data.cardType;
+                hasFirstType = true;
+            }
+            else if (card.data.cardType != firstType)
+            {
+                allSame = false;
             }
         }
 
-        for (int i = 0; i < cards.Count; i++)
-        {
-            for (int j = i + 1; j < cards.Count; j++)
-            {
-                for (int k = j + 1; k < cards.Count; k++)
-                {
-                    if (IsValidThreeCardCombination(cards[i], cards[j], cards[k]))
-                        return true;
-                }
-            }
-        }
+        // Three wildcards, or one/two wildcards with only one concrete symbol,
+        // can all be assigned to the same symbol.
+        if (nonWildcardCount <= 1) return true;
 
-        return false;
+        // Three concrete cards of one symbol are valid.
+        if (allSame) return true;
+
+        // Three concrete cards of three different symbols are valid.
+        // With one wildcard, two concrete different symbols are also valid.
+        return nonWildcardCount == 2 || nonWildcardCount == 3 && HasThreeDifferentConcreteSymbols(cards);
     }
 
-    /// <summary>
-    /// Valid combinations are three equal symbols, three different symbols, or
-    /// a combination made valid by one or more black wildcards.
-    /// </summary>
-    public static bool IsValidThreeCardCombination(CardInstance a, CardInstance b, CardInstance c)
+    private static bool HasThreeDifferentConcreteSymbols(CardInstance[] cards)
     {
-        if (a == null || b == null || c == null ||
-            a.data == null || b.data == null || c.data == null)
-            return false;
-
-        CardType[] types = { a.data.cardType, b.data.cardType, c.data.cardType };
-        bool[] wild =
+        CardType first = default(CardType);
+        CardType second = default(CardType);
+        int count = 0;
+        foreach (CardInstance card in cards)
         {
-            IsBlackWildcard(types[0]),
-            IsBlackWildcard(types[1]),
-            IsBlackWildcard(types[2])
-        };
-
-        int wildcardCount = (wild[0] ? 1 : 0) + (wild[1] ? 1 : 0) + (wild[2] ? 1 : 0);
-
-        if (wildcardCount > 0)
-        {
-            List<CardType> concrete = new List<CardType>();
-            if (!wild[0]) concrete.Add(types[0]);
-            if (!wild[1]) concrete.Add(types[1]);
-            if (!wild[2]) concrete.Add(types[2]);
-
-            // A wildcard can complete a set of equal symbols, or complete a
-            // set of three different symbols.
-            if (concrete.Count == 0)
-                return true;
-
-            bool allEqual = true;
-            for (int i = 1; i < concrete.Count; i++)
-            {
-                if (concrete[i] != concrete[0])
-                {
-                    allEqual = false;
-                    break;
-                }
-            }
-
-            if (allEqual)
-                return true;
-
-            HashSet<CardType> distinct = new HashSet<CardType>(concrete);
-            if (distinct.Count + wildcardCount >= 3)
-                return true;
+            if (IsBlackWildcard(card)) continue;
+            if (count == 0) first = card.data.cardType;
+            else if (count == 1) second = card.data.cardType;
+            else if (card.data.cardType == first || card.data.cardType == second) return false;
+            count++;
         }
+        return count == 3;
+    }
 
-        if (types[0] == types[1] && types[1] == types[2])
-            return true;
-
-        return types[0] != types[1] &&
-               types[0] != types[2] &&
-               types[1] != types[2];
+    public static bool IsValidThreeCardCombination(List<CardInstance> cards)
+    {
+        return cards != null && cards.Count == 3 && IsValidThreeCardCombination(cards[0], cards[1], cards[2]);
     }
 }

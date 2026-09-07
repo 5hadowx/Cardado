@@ -9,12 +9,14 @@ public class CardadoPlayerState
 {
     public string playerId;
     public int chips;
-    public int bid;
+    public int diceBid;
     public int handsWon;
+    public bool hasPlacedBid;
 
-    // Values of dice currently available to the player.
-    // A value of 0 means the die is no longer available to play.
+    // Die values remain available for card effects after the die is played.
+    // playedDice tracks whether that die has already been played in the current round.
     public List<int> dice = new List<int>();
+    public List<bool> playedDice = new List<bool>();
 
     public Hand hand = new Hand();
 
@@ -26,7 +28,9 @@ public class CardadoPlayerState
 
     public void ResetRoundScore()
     {
-        bid = 0;
+        diceBid = 0;
+        hasPlacedBid = false;
         handsWon = 0;
+        playedDice.Clear();
     }
 }

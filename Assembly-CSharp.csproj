@@ -48,15 +48,20 @@
     <Analyzer Include="C:\Program Files\Unity\Hub\Editor\6000.1.17f1\Editor\Data\Tools\Unity.SourceGenerators\Unity.UIToolkit.SourceGenerator.dll" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoMatchConfig.cs" />
     <Compile Include="Assets\1. Scripts\c. Cards\Deck.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoPlayerState.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\CardHover.cs" />
     <Compile Include="Assets\1. Scripts\e. UI\LanguageManager.cs" />
+    <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoWarManager.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\DeckTester.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoRoundSetup.cs" />
+    <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoDevelopmentCardLogger.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\CardTester.cs" />
     <Compile Include="Assets\1. Scripts\c. Cards\Hand.cs" />
+    <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoWarRules.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\CardClickable.cs" />
+    <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoDevelopmentTester.cs" />
     <Compile Include="Assets\9. Editor\CardGenerator.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoGameManager.cs" />
     <Compile Include="Assets\1. Scripts\c. Cards\CardDisplay.cs" />
@@ -64,6 +69,7 @@
     <Compile Include="Assets\1. Scripts\c. Cards\CardData.cs" />
     <Compile Include="Assets\1. Scripts\a. Game Manager\GameUIManager.cs" />
     <Compile Include="Assets\1. Scripts\c. Cards\CardInstance.cs" />
+    <Compile Include="Assets\1. Scripts\a. Game Manager\CardadoWarDevelopmentOverlay.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="Assets\TextMesh Pro\Shaders\TMPro.cginc" />
