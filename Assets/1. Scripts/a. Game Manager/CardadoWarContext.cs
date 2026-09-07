@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 
 /// <summary>
-/// Isolated mutable state for one active War. The two participant PlayerState
-/// objects can be temporarily bound to these collections so existing gameplay
-/// code reads/writes War state without exposing the normal match collections.
+/// Isolated mutable state for one active War. It contains exactly the two War
+/// participants and the temporary cards, dice, effects and turn state used by War.
 /// </summary>
 public sealed class CardadoWarContext
 {
@@ -45,32 +44,6 @@ public sealed class CardadoWarContext
         internal List<bool> MutablePlayedDice => playedDice;
     }
 
-    public sealed class Binding
-    {
-        private readonly CardadoPlayerState player;
-        private readonly List<CardInstance> originalCards;
-        private readonly List<int> originalDice;
-        private readonly List<bool> originalPlayedDice;
-        private bool restored;
-
-        internal Binding(CardadoPlayerState player)
-        {
-            this.player = player;
-            originalCards = player.hand.cardsInHand;
-            originalDice = player.dice;
-            originalPlayedDice = player.playedDice;
-        }
-
-        public void Restore()
-        {
-            if (restored) return;
-            player.hand.cardsInHand = originalCards;
-            player.dice = originalDice;
-            player.playedDice = originalPlayedDice;
-            restored = true;
-        }
-    }
-
     public Participant Challenger { get; }
     public Participant Target { get; }
     public int Wager { get; internal set; }
@@ -99,7 +72,6 @@ public sealed class CardadoWarContext
     {
         if (challengerIndex < 0 || targetIndex < 0 || challengerIndex == targetIndex)
             throw new ArgumentException("A War requires two distinct valid participants.");
-
         return new CardadoWarContext(
             new Participant(challengerIndex, challengerId, challengerChips),
             new Participant(targetIndex, targetId, targetChips));
@@ -122,39 +94,12 @@ public sealed class CardadoWarContext
         return null;
     }
 
-    public Binding Bind(CardadoPlayerState player, Participant participant)
-    {
-        if (player == null || participant == null)
-            throw new ArgumentNullException();
-        if (player.playerId != participant.PlayerId)
-            throw new InvalidOperationException("War participant does not match the PlayerState being bound.");
-
-        Binding binding = new Binding(player);
-        player.hand.cardsInHand = participant.MutableCards;
-        player.dice = participant.MutableDice;
-        player.playedDice = participant.MutablePlayedDice;
-        return binding;
-    }
-
-    internal void CopyCardsFrom(IEnumerable<CardInstance> source, Participant destination)
-    {
-        destination.MutableCards.Clear();
-        foreach (CardInstance card in source)
-            if (card != null) destination.MutableCards.Add(card);
-    }
-
     internal void AddCard(Participant participant, CardInstance card)
     {
         if (card != null) participant.MutableCards.Add(card);
     }
 
     internal bool RemoveCard(Participant participant, CardInstance card) => participant.MutableCards.Remove(card);
-
-    internal void ClearDice(Participant participant)
-    {
-        participant.MutableDice.Clear();
-        participant.MutablePlayedDice.Clear();
-    }
 
     internal void AddDie(Participant participant, int value)
     {
@@ -169,18 +114,6 @@ public sealed class CardadoWarContext
 
     internal bool IsDieTargetable(Participant participant, int dieIndex) =>
         dieIndex >= 0 && dieIndex < participant.MutableDice.Count && participant.MutableDice[dieIndex] > 0;
-
-    internal void MarkDiePlayed(Participant participant, int dieIndex) => participant.MutablePlayedDice[dieIndex] = true;
-
-    internal int GetDieValue(Participant participant, int dieIndex) =>
-        IsDieTargetable(participant, dieIndex) ? participant.MutableDice[dieIndex] : 0;
-
-    internal void SetDieValue(Participant participant, int dieIndex, int value)
-    {
-        if (!IsDieTargetable(participant, dieIndex))
-            throw new ArgumentOutOfRangeException(nameof(dieIndex));
-        participant.MutableDice[dieIndex] = value;
-    }
 
     internal bool HasPlayedCard(Participant participant) =>
         ReferenceEquals(participant, Challenger) ? WarCardPlayedByChallenger : WarCardPlayedByTarget;
