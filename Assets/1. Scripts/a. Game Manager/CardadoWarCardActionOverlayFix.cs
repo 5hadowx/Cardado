@@ -69,7 +69,6 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
         const float height = 560f;
         Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
 
-        // Only take over the War playing panel. Claim/target/wager/order remain owned by WarManager.
         if (!choiceOverlay && warManager.IsWarCardActionPending)
             DrawCardSelection(panel, context.CurrentPlayer, width);
         else if (choiceOverlay)
@@ -191,7 +190,7 @@ public sealed class CardadoWarCardActionOverlayFix : MonoBehaviour
     {
         if (accepted)
         {
-            Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.playerId} -> {selectedCard.data.id} [{selectedCard.data.cardType}].");
+            Debug.Log($"[Cardado][War] CARD CHOICE ACCEPTED (UI): {selectedActor.PlayerId} -> {selectedCard.data.id} [{selectedCard.data.cardType}].");
             selectedCard = null;
             selectedActor = null;
             choiceStage = 0;
