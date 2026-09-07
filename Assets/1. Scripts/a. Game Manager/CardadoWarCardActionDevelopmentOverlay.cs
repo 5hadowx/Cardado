@@ -23,9 +23,11 @@ public sealed class CardadoWarCardActionDevelopmentOverlay : MonoBehaviour
 
     private void OnGUI()
     {
-        if (gameManager == null || warManager == null || !warManager.WarInProgress || !warManager.IsWarCardActionPending) return;
+        if (gameManager == null || warManager == null || !warManager.IsWarInProgressForDevelopment()) return;
+        if (!warManager.IsWarCardActionPending) return;
         var actor = warManager.PendingChoiceActor;
         if (actor == null) return;
+
         GUILayout.BeginArea(new Rect(20, 20, 520, Screen.height - 40), GUI.skin.box);
         GUILayout.Label($"War Player {actor.PlayerIndex + 1} — {warManager.PendingChoice}");
         DrawPending(actor);
@@ -36,6 +38,7 @@ public sealed class CardadoWarCardActionDevelopmentOverlay : MonoBehaviour
     {
         switch (warManager.PendingChoice)
         {
+            case CardadoWarPendingChoice.None: DrawCards(actor); break;
             case CardadoWarPendingChoice.ModifierTarget: DrawModifierTargets(actor); break;
             case CardadoWarPendingChoice.ModifierSign:
                 if (GUILayout.Button("+1")) Act(() => warManager.TryChooseModifierValue(1));
@@ -51,7 +54,7 @@ public sealed class CardadoWarCardActionDevelopmentOverlay : MonoBehaviour
                 if (GUILayout.Button("Flip own die")) Act(() => warManager.TryChooseJokerTarget(false));
                 if (GUILayout.Button("Flip opponent die")) Act(() => warManager.TryChooseJokerTarget(true));
                 break;
-            case CardadoWarPendingChoice.JokerDie: DrawJokerDice(actor); break;
+            case CardadoWarPendingChoice.JokerDie: DrawWarDice(warManager.GetJokerTargetForDevelopment(), warManager.TryChooseJokerDie); break;
             case CardadoWarPendingChoice.SpecialArtistMode:
                 if (GUILayout.Button("Reroll all own dice")) Act(() => warManager.TryChooseSpecialArtistMode(true));
                 if (GUILayout.Button("Reroll one die 3x and choose")) Act(() => warManager.TryChooseSpecialArtistMode(false));
@@ -88,7 +91,6 @@ public sealed class CardadoWarCardActionDevelopmentOverlay : MonoBehaviour
             case CardadoWarPendingChoice.NoblemanEffect:
                 DrawNobleman(CardType.Artist, "Artist"); DrawNobleman(CardType.Knight, "Soldier"); DrawNobleman(CardType.Collector, "Collector"); DrawNobleman(CardType.Bodyguard, "Bodyguard");
                 break;
-            default: DrawCards(actor); break;
         }
     }
 
@@ -96,7 +98,8 @@ public sealed class CardadoWarCardActionDevelopmentOverlay : MonoBehaviour
     {
         for (int i = 0; i < actor.Cards.Count; i++)
         {
-            int index = i; var card = actor.Cards[index];
+            int index = i;
+            var card = actor.Cards[index];
             if (card == null || card.data == null) continue;
             if (GUILayout.Button($"Play {card.data.cardType} [{card.data.rarity}]")) Act(() => warManager.TryPlayWarCard(actor.PlayerIndex, index));
         }
@@ -105,8 +108,9 @@ public sealed class CardadoWarCardActionDevelopmentOverlay : MonoBehaviour
 
     private void DrawModifierTargets(CardadoWarContext.Participant actor)
     {
+        CardadoWarContext.Participant opponent = warManager.Context.OpponentOf(actor);
         DrawModifierTargetGroup(actor);
-        DrawModifierTargetGroup(warManager.Context.OpponentOf(actor));
+        DrawModifierTargetGroup(opponent);
     }
 
     private void DrawModifierTargetGroup(CardadoWarContext.Participant target)
@@ -127,15 +131,6 @@ public sealed class CardadoWarCardActionDevelopmentOverlay : MonoBehaviour
             int die = i;
             if (!warManager.Context.IsDieTargetable(participant, die)) continue;
             if (GUILayout.Button($"Die {die + 1}: {participant.Dice[die]}")) Act(() => action(die));
-        }
-    }
-
-    private void DrawJokerDice(CardadoWarContext.Participant actor)
-    {
-        for (int i = 0; i < actor.Dice.Count; i++)
-        {
-            int die = i;
-            if (GUILayout.Button($"Flip die {die + 1}")) Act(() => warManager.TryChooseJokerDie(die));
         }
     }
 
