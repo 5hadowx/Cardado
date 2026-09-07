@@ -59,7 +59,9 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
             DrawPreWar();
         else if (warManager.IsWarPlaying)
         {
-            if (warManager.IsWarCardActionPending)
+            if (warManager.PendingChoice != CardadoWarPendingChoice.None)
+                DrawPendingWarChoice();
+            else if (warManager.IsWarCardActionPending)
                 DrawWarCardAction();
             else
                 DrawWarDice();
@@ -76,18 +78,10 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
     {
         switch (preWarStep)
         {
-            case PreWarStep.Claim:
-                DrawClaimStep();
-                break;
-            case PreWarStep.Target:
-                DrawTargetStep();
-                break;
-            case PreWarStep.Wager:
-                DrawWagerStep();
-                break;
-            case PreWarStep.Order:
-                DrawOrderStep();
-                break;
+            case PreWarStep.Claim: DrawClaimStep(); break;
+            case PreWarStep.Target: DrawTargetStep(); break;
+            case PreWarStep.Wager: DrawWagerStep(); break;
+            case PreWarStep.Order: DrawOrderStep(); break;
         }
     }
 
@@ -149,8 +143,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         GUILayout.Label("Choose War wager:");
         if (GUILayout.Button("Wager 1 chip"))
         {
-            if (warManager.TryChooseWarWager(1))
-                preWarStep = PreWarStep.Order;
+            if (warManager.TryChooseWarWager(1)) preWarStep = PreWarStep.Order;
             Act(() => true);
         }
     }
@@ -160,14 +153,12 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         GUILayout.Label("Choose who plays first:");
         if (GUILayout.Button("Challenger plays first"))
         {
-            if (warManager.TryChooseWarOrder(true))
-                warWasStarted = true;
+            if (warManager.TryChooseWarOrder(true)) warWasStarted = true;
             Act(() => true);
         }
         if (GUILayout.Button("Target plays first"))
         {
-            if (warManager.TryChooseWarOrder(false))
-                warWasStarted = true;
+            if (warManager.TryChooseWarOrder(false)) warWasStarted = true;
             Act(() => true);
         }
     }
@@ -203,8 +194,6 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
 
         if (GUILayout.Button("Skip card action"))
             Act(() => warManager.TrySkipCardAction(current.PlayerIndex));
-
-        DrawPendingWarChoice();
     }
 
     private void DrawPendingWarChoice()
@@ -213,7 +202,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         {
             case CardadoWarPendingChoice.ModifierTarget:
                 GUILayout.Label("Choose a die to modify:");
-                DrawWarTargetableDice(warManager.PendingChoiceActor, true);
+                DrawWarTargetableDice(warManager.PendingChoiceActor);
                 break;
             case CardadoWarPendingChoice.ModifierSign:
                 GUILayout.Label("Choose modifier:");
@@ -222,11 +211,11 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
                 break;
             case CardadoWarPendingChoice.ArtistDie:
                 GUILayout.Label("Choose your die to reroll:");
-                DrawWarTargetableDice(warManager.PendingChoiceActor, false);
+                DrawWarTargetableDice(warManager.PendingChoiceActor);
                 break;
             case CardadoWarPendingChoice.KnightDie:
                 GUILayout.Label("Choose opponent die to reroll:");
-                DrawWarTargetableDice(warManager.Context.OpponentOf(warManager.PendingChoiceActor), false);
+                DrawWarTargetableDice(warManager.Context.OpponentOf(warManager.PendingChoiceActor));
                 break;
             case CardadoWarPendingChoice.CollectorOpponentCard:
                 DrawWarOpponentCardSlots();
@@ -238,12 +227,12 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
             case CardadoWarPendingChoice.MirrorOwnDie:
             case CardadoWarPendingChoice.SpecialMirrorOwnDie:
                 GUILayout.Label("Choose your die:");
-                DrawWarTargetableDice(warManager.PendingChoiceActor, false);
+                DrawWarTargetableDice(warManager.PendingChoiceActor);
                 break;
             case CardadoWarPendingChoice.MirrorOpponentDie:
             case CardadoWarPendingChoice.SpecialMirrorOpponentDie:
                 GUILayout.Label("Choose opponent die:");
-                DrawWarTargetableDice(warManager.Context.OpponentOf(warManager.PendingChoiceActor), false);
+                DrawWarTargetableDice(warManager.Context.OpponentOf(warManager.PendingChoiceActor));
                 break;
             case CardadoWarPendingChoice.JokerPlayer:
                 GUILayout.Label("Choose whose die to flip:");
@@ -252,7 +241,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
                 break;
             case CardadoWarPendingChoice.JokerDie:
                 GUILayout.Label("Choose die to flip:");
-                DrawWarTargetableDice(warManager.GetJokerTargetForDevelopment(), false);
+                DrawWarTargetableDice(warManager.GetJokerTargetForDevelopment());
                 break;
             case CardadoWarPendingChoice.SpecialArtistMode:
                 if (GUILayout.Button("Reroll all own dice")) Act(() => warManager.TryChooseSpecialArtistMode(true));
@@ -260,7 +249,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
                 break;
             case CardadoWarPendingChoice.SpecialArtistDie:
                 GUILayout.Label("Choose die:");
-                DrawWarTargetableDice(warManager.PendingChoiceActor, false);
+                DrawWarTargetableDice(warManager.PendingChoiceActor);
                 break;
             case CardadoWarPendingChoice.SpecialArtistResult:
                 for (int i = 0; i < 3; i++)
@@ -276,7 +265,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
                 break;
             case CardadoWarPendingChoice.SpecialKnightDie:
                 GUILayout.Label("Choose opponent die:");
-                DrawWarTargetableDice(warManager.Context.OpponentOf(warManager.PendingChoiceActor), false);
+                DrawWarTargetableDice(warManager.Context.OpponentOf(warManager.PendingChoiceActor));
                 break;
             case CardadoWarPendingChoice.SpecialCollectorMode:
                 if (GUILayout.Button("Take one hidden card from each side, then play one")) Act(() => warManager.TryChooseSpecialCollectorMode(true));
@@ -302,14 +291,6 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
                 if (GUILayout.Button("Swap one own die with an opponent die")) Act(() => warManager.TryChooseSpecialMirrorMode(true));
                 if (GUILayout.Button("Swap one die between the two participants")) Act(() => warManager.TryChooseSpecialMirrorMode(false));
                 break;
-            case CardadoWarPendingChoice.SpecialMirrorOwnDie:
-                GUILayout.Label("Choose own die:");
-                DrawWarTargetableDice(warManager.PendingChoiceActor, false);
-                break;
-            case CardadoWarPendingChoice.SpecialMirrorOpponentDie:
-                GUILayout.Label("Choose opponent die:");
-                DrawWarTargetableDice(warManager.Context.OpponentOf(warManager.PendingChoiceActor), false);
-                break;
             case CardadoWarPendingChoice.NoblemanEffect:
                 GUILayout.Label("Choose the Nobleman special effect:");
                 if (GUILayout.Button("Artist special")) Act(() => warManager.TryChooseNoblemanEffect(CardType.Artist));
@@ -330,15 +311,8 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
             string label = card != null && card.data != null
                 ? $"Card {cardIndex + 1}: {card.data.cardType} [{card.data.rarity}]"
                 : $"Card slot {cardIndex + 1}";
-            if (GUILayout.Button(label))
-            {
-                switch (warManager.PendingChoice)
-                {
-                    case CardadoWarPendingChoice.SpecialCollectorOwnCard:
-                        Act(() => warManager.TryChooseSpecialCollectorOwnCard(cardIndex));
-                        break;
-                }
-            }
+            if (GUILayout.Button(label) && warManager.PendingChoice == CardadoWarPendingChoice.SpecialCollectorOwnCard)
+                Act(() => warManager.TryChooseSpecialCollectorOwnCard(cardIndex));
         }
     }
 
@@ -361,7 +335,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
         }
     }
 
-    private void DrawWarTargetableDice(CardadoWarContext.Participant participant, bool includeOpponent)
+    private void DrawWarTargetableDice(CardadoWarContext.Participant participant)
     {
         if (participant == null) return;
         for (int i = 0; i < participant.Dice.Count; i++)
@@ -372,36 +346,16 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
             {
                 switch (warManager.PendingChoice)
                 {
-                    case CardadoWarPendingChoice.ModifierTarget:
-                        Act(() => warManager.TryChooseModifierDie(participant.PlayerIndex, dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.ArtistDie:
-                        Act(() => warManager.TryChooseArtistDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.KnightDie:
-                        Act(() => warManager.TryChooseKnightDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.MirrorOwnDie:
-                        Act(() => warManager.TryChooseMirrorOwnDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.MirrorOpponentDie:
-                        Act(() => warManager.TryChooseMirrorOpponentDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.SpecialArtistDie:
-                        Act(() => warManager.TryChooseSpecialArtistDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.SpecialKnightDie:
-                        Act(() => warManager.TryChooseSpecialKnightDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.SpecialMirrorOwnDie:
-                        Act(() => warManager.TryChooseSpecialMirrorOwnDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.SpecialMirrorOpponentDie:
-                        Act(() => warManager.TryChooseSpecialMirrorOpponentDie(dieIndex));
-                        break;
-                    case CardadoWarPendingChoice.JokerDie:
-                        Act(() => warManager.TryChooseJokerDie(dieIndex));
-                        break;
+                    case CardadoWarPendingChoice.ModifierTarget: Act(() => warManager.TryChooseModifierDie(participant.PlayerIndex, dieIndex)); break;
+                    case CardadoWarPendingChoice.ArtistDie: Act(() => warManager.TryChooseArtistDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.KnightDie: Act(() => warManager.TryChooseKnightDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.MirrorOwnDie: Act(() => warManager.TryChooseMirrorOwnDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.MirrorOpponentDie: Act(() => warManager.TryChooseMirrorOpponentDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.SpecialArtistDie: Act(() => warManager.TryChooseSpecialArtistDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.SpecialKnightDie: Act(() => warManager.TryChooseSpecialKnightDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.SpecialMirrorOwnDie: Act(() => warManager.TryChooseSpecialMirrorOwnDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.SpecialMirrorOpponentDie: Act(() => warManager.TryChooseSpecialMirrorOpponentDie(dieIndex)); break;
+                    case CardadoWarPendingChoice.JokerDie: Act(() => warManager.TryChooseJokerDie(dieIndex)); break;
                 }
             }
         }
@@ -434,8 +388,7 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
 
     private void DrawWarComplete()
     {
-        if (lastWarChallenger >= 0 && warManager.CanClaimWar(lastWarChallenger) &&
-            GUILayout.Button("Declare another War"))
+        if (lastWarChallenger >= 0 && warManager.CanClaimWar(lastWarChallenger) && GUILayout.Button("Declare another War"))
         {
             if (warManager.TryDeclareAnotherWar(lastWarChallenger))
             {
