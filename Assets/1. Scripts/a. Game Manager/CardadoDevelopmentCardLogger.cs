@@ -107,7 +107,7 @@ public class CardadoDevelopmentCardLogger : MonoBehaviour
         {
             bool eligible = player != null &&
                             player.hand != null &&
-                            CardadoWarRules.HasWarClaim(player.hand.cardsInHand);
+                            CardadoWarCardRules.HasValidClaim(player.hand.cardsInHand);
 
             Debug.Log($"[Cardado] {player.playerId}: War eligible = {eligible}.");
         }
