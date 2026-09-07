@@ -41,7 +41,6 @@ public class CardadoWarManager : MonoBehaviour
     private enum WarUiStep { Claim, Target, Wager, Order, Playing, Complete }
 
     [SerializeField] private CardadoGameManager gameManager;
-    [SerializeField] private bool showTemporaryUi = true;
     [SerializeField, Min(1)] private int warCardCount = 3;
     [SerializeField, Min(1)] private int warDiceCount = 3;
 
@@ -77,10 +76,6 @@ public class CardadoWarManager : MonoBehaviour
     private int pendingModifierDieIndex = -1;
     private int pendingMirrorOwnDieIndex = -1;
 
-    private GUIStyle panelStyle;
-    private GUIStyle titleStyle;
-    private GUIStyle buttonStyle;
-    private GUIStyle selectedButtonStyle;
 
     public bool WarInProgress => warContext != null && !warResolved;
     public bool IsWarPlaying => WarInProgress && uiStep == WarUiStep.Playing;
@@ -555,7 +550,6 @@ public class CardadoWarManager : MonoBehaviour
         CardadoWarContext.Participant actor = pendingChoiceActor;
         warContext.AddEffect(CardadoWarContext.EffectType.BodyguardDie, card, actor, actor, dieIndex);
         ClearPendingChoice();
-        gameManager.NotifyWarCardActionResolved(gameManager.Players[actor.PlayerIndex], card);
         return true;
     }
 
@@ -725,7 +719,6 @@ public class CardadoWarManager : MonoBehaviour
         else
             warContext.AddEffect(CardadoWarContext.EffectType.BodyguardHand, card, actor);
         ClearPendingChoice();
-        gameManager.NotifyWarCardActionResolved(gameManager.Players[actor.PlayerIndex], card);
         return true;
     }
 
@@ -762,7 +755,6 @@ public class CardadoWarManager : MonoBehaviour
     {
         if (card == null) return;
         if (!persistent) gameManager.DiscardResolvedCard(card);
-        gameManager.NotifyWarCardActionResolved(gameManager.Players[actor.PlayerIndex], card);
         if (!persistent && (card.data.cardType == CardType.King || card.data.cardType == CardType.Queen))
             GrantBonusCardAction(actor);
     }
@@ -1018,114 +1010,30 @@ public class CardadoWarManager : MonoBehaviour
         ClearPendingChoice();
     }
 
+    public int CurrentWarClaimantIndex => GetCurrentWarPlayerIndex();
+
+    public bool TryDeclareAnotherWar(int playerIndex)
+    {
+        if (uiStep != WarUiStep.Complete || !warResolved || playerIndex != GetCurrentWarPlayerIndex() || !CanClaimWar(playerIndex)) return false;
+        AdvanceToCurrentClaimant();
+        return true;
+    }
+
+    public bool TryContinueWarPhase()
+    {
+        if (uiStep != WarUiStep.Complete || !warResolved) return false;
+        currentClaimPosition++;
+        AdvanceToCurrentClaimant();
+        return true;
+    }
+
+    public bool TryFinishWarPhase()
+    {
+        if (uiStep != WarUiStep.Complete || (warContext != null && !warResolved)) return false;
+        gameManager.CompleteWarPhase();
+        return true;
+    }
+
     private int GetCurrentWarPlayerIndex() => currentWarTurn == 0 ? challengerIndex : targetIndex;
 
-    private string BuildClaimOrderLabel()
-    {
-        List<string> names = new List<string>();
-        foreach (int index in claimOrder)
-            if (index >= 0 && index < gameManager.Players.Count) names.Add(gameManager.Players[index].playerId);
-        return string.Join(" -> ", names);
-    }
-
-    private string DescribeOptimalClaim(int playerIndex)
-    {
-        List<CardInstance> claim = CardadoWarCardRules.FindOptimalClaim(gameManager.Players[playerIndex].hand.cardsInHand);
-        if (claim == null) return "none";
-        List<string> labels = new List<string>();
-        foreach (CardInstance card in claim)
-            labels.Add(card != null && card.data != null ? card.data.id : "?");
-        return string.Join(" + ", labels);
-    }
-
-    private void OnGUI()
-    {
-        if (!showTemporaryUi || gameManager == null || gameManager.Phase != CardadoGamePhase.WarResolution || IsWarPlaying) return;
-        EnsureStyles();
-        const float width = 760f;
-        const float height = 500f;
-        Rect panel = new Rect((Screen.width - width) * 0.5f, (Screen.height - height) * 0.5f, width, height);
-        GUI.Box(panel, GUIContent.none, panelStyle);
-
-        switch (uiStep)
-        {
-            case WarUiStep.Claim: DrawClaimPanel(panel, width); break;
-            case WarUiStep.Target: DrawTargetPanel(panel, width); break;
-            case WarUiStep.Wager: DrawWagerPanel(panel, width); break;
-            case WarUiStep.Order: DrawOrderPanel(panel, width); break;
-            case WarUiStep.Complete: DrawCompletePanel(panel, width); break;
-        }
-    }
-
-    private void DrawClaimPanel(Rect panel, float width)
-    {
-        if (currentClaimPosition >= claimOrder.Count) { DrawCompletePanel(panel, width); return; }
-        int playerIndex = claimOrder[currentClaimPosition];
-        CardadoPlayerState player = gameManager.Players[playerIndex];
-        GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — DECLARE OR PASS", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 75, width - 50, 30), $"{player.playerId} — chips {player.chips}", GUI.skin.label);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 110, width - 50, 30), $"Optimal claim: {DescribeOptimalClaim(playerIndex)}", GUI.skin.label);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 160, width - 50, 60), "DECLARE WAR", buttonStyle)) TryClaimWar(playerIndex);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 235, width - 50, 60), "PASS", buttonStyle)) TryPassWar(playerIndex);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 330, width - 50, 30), $"Order: {BuildClaimOrderLabel()}", GUI.skin.label);
-    }
-
-    private void DrawTargetPanel(Rect panel, float width)
-    {
-        GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE OPPONENT", titleStyle);
-        for (int i = 0; i < gameManager.Players.Count; i++)
-        {
-            if (i == challengerIndex || gameManager.Players[i].chips < 1) continue;
-            if (GUI.Button(new Rect(panel.x + 25, panel.y + 95 + i * 65, width - 50, 55), $"{gameManager.Players[i].playerId} — {gameManager.Players[i].chips} chip(s)", buttonStyle))
-                TryChooseTarget(i);
-        }
-    }
-
-    private void DrawWagerPanel(Rect panel, float width)
-    {
-        GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE WAGER", titleStyle);
-        bool valid = gameManager.Players[targetIndex].chips >= 1;
-        GUI.enabled = valid;
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 105, width - 50, 60), "1 CHIP", buttonStyle)) TryChooseWarWager(1);
-        GUI.enabled = true;
-    }
-
-    private void DrawOrderPanel(Rect panel, float width)
-    {
-        GUI.Label(new Rect(panel.x + 25, panel.y + 20, width - 50, 45), "WAR — CHOOSE ORDER", titleStyle);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 105, width - 50, 65), "CHALLENGER PLAYS FIRST", buttonStyle)) TryChooseWarOrder(true);
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 190, width - 50, 65), "CHALLENGER PLAYS SECOND", buttonStyle)) TryChooseWarOrder(false);
-    }
-
-    private void DrawCompletePanel(Rect panel, float width)
-    {
-        GUI.Label(new Rect(panel.x + 25, panel.y + 30, width - 50, 45), "WAR PHASE COMPLETE", titleStyle);
-        GUI.Label(new Rect(panel.x + 25, panel.y + 85, width - 50, 30), "The War result has been applied to the normal match state.", GUI.skin.label);
-        if (warResolved && challengerIndex >= 0)
-        {
-            bool canAgain = CanClaimWar(challengerIndex);
-            if (canAgain && GUI.Button(new Rect(panel.x + 25, panel.y + 145, width - 50, 60), "DECLARE ANOTHER WAR", selectedButtonStyle))
-            {
-                AdvanceToCurrentClaimant();
-                return;
-            }
-            if (GUI.Button(new Rect(panel.x + 25, panel.y + (canAgain ? 220 : 145), width - 50, 60), "CONTINUE", selectedButtonStyle))
-            {
-                currentClaimPosition++;
-                AdvanceToCurrentClaimant();
-            }
-            return;
-        }
-        if (GUI.Button(new Rect(panel.x + 25, panel.y + 150, width - 50, 60), "FINISH WAR PHASE", selectedButtonStyle))
-            gameManager.CompleteWarPhase();
-    }
-
-    private void EnsureStyles()
-    {
-        if (panelStyle != null) return;
-        panelStyle = new GUIStyle(GUI.skin.box) { padding = new RectOffset(20, 20, 20, 20) };
-        titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-        buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 18, fontStyle = FontStyle.Bold };
-        selectedButtonStyle = new GUIStyle(buttonStyle);
-    }
 }

@@ -29,7 +29,8 @@ public class CardadoGameManager : MonoBehaviour
     public RoundSetupDecisionType? PendingDealerDecision { get; private set; }
     public Deck RoundDeck { get; private set; }
     public int MatchWinnerIndex { get; private set; } = -1;
-    public CardInstance PendingCardActionCard { get; private set; }
+    public CardInstance PendingCardActionCard => cardActionManager == null ? null : cardActionManager.PendingCardActionCard;
+    public CardadoCardActionManager CardActionManager => cardActionManager;
 
     public event Action<CardadoGamePhase> PhaseChanged;
     public event Action<RoundSetupRoll> SetupDiceRolled;
@@ -63,6 +64,8 @@ public class CardadoGameManager : MonoBehaviour
         ValidatePlayerConfiguration();
         BuildPlayers();
         InitializeDeck();
+        cardActionManager = GetComponent<CardadoCardActionManager>();
+        if (cardActionManager == null) cardActionManager = gameObject.AddComponent<CardadoCardActionManager>();
         if (GetComponent<CardadoCardActionDevelopmentOverlay>() == null) gameObject.AddComponent<CardadoCardActionDevelopmentOverlay>();
     }
 
@@ -176,46 +179,24 @@ public class CardadoGameManager : MonoBehaviour
             CardadoWarManager war = FindFirstObjectByType<CardadoWarManager>();
             return war != null && war.TrySkipCardAction(playerIndex);
         }
-        if (Phase != CardadoGamePhase.CardActionDecision || playerIndex != CurrentHandPlayerIndex || PendingCardActionCard != null) return false;
-        BeginDieSelectionForCurrentPlayer();
-        return true;
+        return cardActionManager != null && cardActionManager.TrySkipCardAction(playerIndex);
     }
 
     public bool TryPlayCard(int playerIndex, int cardIndex)
     {
         ValidatePlayerIndex(playerIndex);
-        if (Phase != CardadoGamePhase.CardActionDecision || playerIndex != CurrentHandPlayerIndex || PendingCardActionCard != null) return false;
-        CardadoPlayerState player = players[playerIndex];
-        if (cardIndex < 0 || cardIndex >= player.hand.cardsInHand.Count) return false;
-        CardInstance card = player.hand.cardsInHand[cardIndex];
-        if (card == null || card.data == null || (!card.data.isBlankCard && card.data.cardType != CardType.Artist)) return false;
-        player.hand.RemoveCard(card);
-        card.isPlayed = true;
-        CardPlayed?.Invoke(player, card);
-        if (card.data.isBlankCard)
+        if (Phase == CardadoGamePhase.WarResolution)
         {
-            DiscardResolvedCard(card);
-            BeginDieSelectionForCurrentPlayer();
-            return true;
+            CardadoWarManager war = FindFirstObjectByType<CardadoWarManager>();
+            return war != null && war.TryPlayWarCard(playerIndex, cardIndex);
         }
-        PendingCardActionCard = card;
-        CardActionRequested?.Invoke(player, CardadoCardActionRequestType.ChooseArtistDie);
-        return true;
+        return cardActionManager != null && cardActionManager.TryPlayCard(playerIndex, cardIndex);
     }
 
     public bool TryResolveArtistDie(int playerIndex, int dieIndex)
     {
         ValidatePlayerIndex(playerIndex);
-        if (Phase != CardadoGamePhase.CardActionDecision || playerIndex != CurrentHandPlayerIndex) return false;
-        CardInstance card = PendingCardActionCard;
-        if (card == null || card.data == null || card.data.cardType != CardType.Artist || !IsDieAvailable(playerIndex, dieIndex)) return false;
-        CardadoPlayerState player = players[playerIndex];
-        player.dice[dieIndex] = UnityEngine.Random.Range(1, 7);
-        CardEffectResolved?.Invoke(player, card, dieIndex, player.dice[dieIndex]);
-        PendingCardActionCard = null;
-        DiscardResolvedCard(card);
-        BeginDieSelectionForCurrentPlayer();
-        return true;
+        return cardActionManager != null && cardActionManager.TryChooseArtistDie(dieIndex);
     }
 
     public int GetAvailableDieCount(int playerIndex)
@@ -235,9 +216,7 @@ public class CardadoGameManager : MonoBehaviour
             return war != null && war.IsWarDieAvailable(playerIndex, dieIndex);
         }
         CardadoPlayerState player = players[playerIndex];
-        if (dieIndex < 0 || dieIndex >= player.dice.Count) return false;
-        if (Phase == CardadoGamePhase.CardActionDecision) return player.dice[dieIndex] > 0;
-        return dieIndex < player.playedDice.Count && !player.playedDice[dieIndex] && player.dice[dieIndex] > 0;
+        return dieIndex >= 0 && dieIndex < player.dice.Count && (dieIndex >= player.playedDice.Count || !player.playedDice[dieIndex]);
     }
 
     public bool IsDieTargetable(int playerIndex, int dieIndex)
@@ -248,8 +227,7 @@ public class CardadoGameManager : MonoBehaviour
             CardadoWarManager war = FindFirstObjectByType<CardadoWarManager>();
             return war != null && war.IsWarDieTargetable(playerIndex, dieIndex);
         }
-        CardadoPlayerState player = players[playerIndex];
-        return dieIndex >= 0 && dieIndex < player.dice.Count && player.dice[dieIndex] > 0;
+        return IsDieAvailable(playerIndex, dieIndex);
     }
 
     public void NotifyWarHandTurnStarted(CardadoPlayerState player, int handNumber, int starterIndex)
@@ -273,6 +251,23 @@ public class CardadoGameManager : MonoBehaviour
         StartingPlayerIndex = winnerPlayerIndex;
         CurrentHandStarterIndex = winnerPlayerIndex;
     }
+
+    internal void CompleteCardActionAfterRules(int playerIndex)
+    {
+        if (Phase != CardadoGamePhase.CardActionDecision || CurrentHandPlayerIndex != playerIndex) return;
+        BeginDieSelectionForCurrentPlayer();
+    }
+
+    internal void RequestAdditionalCardAction(int playerIndex)
+    {
+        if (!IsValidPlayerIndex(playerIndex) || CurrentHandPlayerIndex != playerIndex) return;
+        if (players[playerIndex].hand.cardsInHand.Count == 0) { BeginDieSelectionForCurrentPlayer(); return; }
+        SetPhase(CardadoGamePhase.CardActionDecision);
+        CardActionRequested?.Invoke(players[playerIndex], CardadoCardActionRequestType.ChooseCard);
+    }
+
+    internal void NotifyCardPlayed(CardadoPlayerState player, CardInstance card) => CardPlayed?.Invoke(player, card);
+    internal void NotifyCardEffectResolved(CardadoPlayerState player, CardInstance card) => CardEffectResolved?.Invoke(player, card, -1, 0);
 
     public void DiscardResolvedCard(CardInstance card)
     {
