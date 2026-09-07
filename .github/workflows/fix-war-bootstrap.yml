@@ -1,0 +1,39 @@
+name: Fix War bootstrap
+
+on:
+  push:
+    branches: [architecture-cleanup]
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    if: github.event.head_commit.message != 'Fix War bootstrap correction'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: architecture-cleanup
+          fetch-depth: 0
+
+      - name: Patch War bootstrap
+        shell: python
+        run: |
+          from pathlib import Path
+          path = Path('Assets/1. Scripts/a. Game Manager/CardadoGameManager.cs')
+          text = path.read_text(encoding='utf-8')
+          old = '''        RoundResolutionCompleted?.Invoke();\n        SetPhase(CardadoGamePhase.WarResolution);\n        if (warManager != null) warManager.EnsureWarPhaseInitialized();'''
+          new = '''        RoundResolutionCompleted?.Invoke();\n        SetPhase(CardadoGamePhase.WarResolution);\n        if (warManager == null)\n        {\n            warManager = FindFirstObjectByType<CardadoWarManager>();\n            if (warManager == null) warManager = gameObject.AddComponent<CardadoWarManager>();\n        }\n        warManager.EnsureWarPhaseInitialized();'''
+          if old not in text:
+              raise SystemExit('Expected War bootstrap block not found')
+          path.write_text(text.replace(old, new, 1), encoding='utf-8')
+
+      - name: Commit source fix and remove workflow
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          rm -f .github/workflows/fix-war-bootstrap.yml
+          git add "Assets/1. Scripts/a. Game Manager/CardadoGameManager.cs"
+          git commit -m "Fix War bootstrap correction"
+          git push origin architecture-cleanup
