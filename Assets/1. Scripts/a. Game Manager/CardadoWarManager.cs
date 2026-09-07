@@ -74,6 +74,9 @@ public class CardadoWarManager : MonoBehaviour
     private CardadoWarContext.Participant pendingJokerTarget;
     private int pendingArtistDieIndex = -1;
     private readonly int[] pendingArtistResults = new int[3];
+    private int pendingModifierTargetIndex = -1;
+    private int pendingModifierDieIndex = -1;
+    private int pendingMirrorOwnDieIndex = -1;
 
     private GUIStyle panelStyle;
     private GUIStyle titleStyle;
@@ -423,6 +426,9 @@ public class CardadoWarManager : MonoBehaviour
         pendingCollectorOpponentCard = null;
         pendingJokerTarget = null;
         pendingArtistDieIndex = -1;
+        pendingModifierTargetIndex = -1;
+        pendingModifierDieIndex = -1;
+        pendingMirrorOwnDieIndex = -1;
         for (int i = 0; i < pendingArtistResults.Length; i++) pendingArtistResults[i] = 0;
     }
 
@@ -438,6 +444,9 @@ public class CardadoWarManager : MonoBehaviour
         pendingCollectorOpponentCard = null;
         pendingJokerTarget = null;
         pendingArtistDieIndex = -1;
+        pendingModifierTargetIndex = -1;
+        pendingModifierDieIndex = -1;
+        pendingMirrorOwnDieIndex = -1;
         for (int i = 0; i < pendingArtistResults.Length; i++) pendingArtistResults[i] = 0;
     }
 
@@ -447,8 +456,6 @@ public class CardadoWarManager : MonoBehaviour
         if (specialType != CardType.Artist && specialType != CardType.Knight &&
             specialType != CardType.Collector && specialType != CardType.Bodyguard) return false;
 
-        CardadoWarContext.Participant actor = pendingChoiceActor;
-        CardInstance card = pendingChoiceCard;
         switch (specialType)
         {
             case CardType.Artist:
@@ -473,15 +480,11 @@ public class CardadoWarManager : MonoBehaviour
         if (targetPlayerIndex != pendingChoiceActor.PlayerIndex && targetPlayerIndex != warContext.OpponentOf(pendingChoiceActor).PlayerIndex) return false;
         CardadoWarContext.Participant target = warContext.GetParticipant(targetPlayerIndex);
         if (target == null || !warContext.IsDieTargetable(target, dieIndex) || IsProtected(target, dieIndex)) return false;
-        pendingChoiceActor = pendingChoiceActor;
         pendingModifierTargetIndex = targetPlayerIndex;
         pendingModifierDieIndex = dieIndex;
         pendingChoice = CardadoWarPendingChoice.ModifierSign;
         return true;
     }
-
-    private int pendingModifierTargetIndex = -1;
-    private int pendingModifierDieIndex = -1;
 
     public bool TryChooseModifierValue(int delta)
     {
@@ -570,8 +573,6 @@ public class CardadoWarManager : MonoBehaviour
         return true;
     }
 
-    private int pendingMirrorOwnDieIndex = -1;
-
     public bool TryChooseMirrorOpponentDie(int dieIndex)
     {
         if (!WarInProgress || (pendingChoice != CardadoWarPendingChoice.MirrorOpponentDie && pendingChoice != CardadoWarPendingChoice.SpecialMirrorOpponentDie) || pendingChoiceActor == null) return false;
@@ -634,7 +635,6 @@ public class CardadoWarManager : MonoBehaviour
     public bool TryChooseSpecialKnightMode(bool rerollAllOpponentDice)
     {
         if (!WarInProgress || pendingChoice != CardadoWarPendingChoice.SpecialKnightMode || pendingChoiceActor == null) return false;
-        pendingSpecialMode = rerollAllOpponentDice;
         if (rerollAllOpponentDice)
         {
             RerollAll(warContext.OpponentOf(pendingChoiceActor));
@@ -704,8 +704,10 @@ public class CardadoWarManager : MonoBehaviour
         CardInstance discardCard = playOwnCard ? pendingCollectorOpponentCard : pendingCollectorOwnCard;
         if (playCard == null || discardCard == null) return false;
 
-        actor.MutableCards.Remove(playCard);
-        opponent.MutableCards.Remove(discardCard);
+        CardadoWarContext.Participant playOwner = playOwnCard ? actor : opponent;
+        CardadoWarContext.Participant discardOwner = playOwnCard ? opponent : actor;
+        if (!playOwner.MutableCards.Remove(playCard) || !discardOwner.MutableCards.Remove(discardCard)) return false;
+
         playCard.isPlayed = true;
         discardCard.isPlayed = true;
         CardInstance originalCard = pendingChoiceCard;
