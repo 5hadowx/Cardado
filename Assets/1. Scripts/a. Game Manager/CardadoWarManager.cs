@@ -92,6 +92,10 @@ public class CardadoWarManager : MonoBehaviour
     public int WarOpponentIndex => warContext == null ? -1 :
         (GetCurrentWarPlayerIndex() == challengerIndex ? targetIndex : challengerIndex);
 
+    public bool IsWarInProgressForDevelopment() => WarInProgress;
+
+    public CardadoWarContext.Participant GetJokerTargetForDevelopment() => pendingJokerTarget;
+
     public int GetPendingArtistResult(int index)
     {
         return index >= 0 && index < pendingArtistResults.Length ? pendingArtistResults[index] : 0;

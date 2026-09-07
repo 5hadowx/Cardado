@@ -56,6 +56,7 @@ public class CardadoGameManager : MonoBehaviour
     private readonly List<int> currentHandDieIndices = new List<int>();
     private Queue<RoundSetupDecisionType> pendingDealerDecisions;
     private int handTurnsCompleted;
+    private CardadoCardActionManager cardActionManager;
 
     private void Awake()
     {
@@ -375,7 +376,6 @@ public class CardadoGameManager : MonoBehaviour
     private void BeginCurrentPlayerTurn()
     {
         if (CurrentHandPlayerIndex < 0) return;
-        PendingCardActionCard = null;
         CardadoPlayerState player = players[CurrentHandPlayerIndex];
         if (player.hand.cardsInHand.Count > 0)
         {
@@ -473,5 +473,6 @@ public class CardadoGameManager : MonoBehaviour
     private int GetPlayerToRightOf(int playerIndex) => players.Count == 0 ? -1 : (playerIndex + 1) % players.Count;
     private int GetNextPlayerIndex(int playerIndex) => (playerIndex + 1) % players.Count;
     private void SetPhase(CardadoGamePhase newPhase) { Phase = newPhase; PhaseChanged?.Invoke(newPhase); }
-    private void ValidatePlayerIndex(int playerIndex) { if (playerIndex < 0 || playerIndex >= players.Count) throw new ArgumentOutOfRangeException(nameof(playerIndex)); }
+    private bool IsValidPlayerIndex(int playerIndex) => playerIndex >= 0 && playerIndex < players.Count;
+    private void ValidatePlayerIndex(int playerIndex) { if (!IsValidPlayerIndex(playerIndex)) throw new ArgumentOutOfRangeException(nameof(playerIndex)); }
 }
