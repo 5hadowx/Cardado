@@ -1,0 +1,70 @@
+name: Fix War phase initialization
+
+on:
+  push:
+    branches: [architecture-cleanup]
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch War initialization
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          gm = Path('Assets/1. Scripts/a. Game Manager/CardadoGameManager.cs')
+          s = gm.read_text()
+          old = '    private CardadoCardActionManager cardActionManager;\n'
+          new = '    private CardadoCardActionManager cardActionManager;\n    private CardadoWarManager warManager;\n'
+          if old not in s or 'private CardadoWarManager warManager;' not in s:
+              s = s.replace(old, new, 1)
+
+          old = '        if (GetComponent<CardadoWarManager>() == null) gameObject.AddComponent<CardadoWarManager>();\n'
+          new = '        warManager = GetComponent<CardadoWarManager>();\n        if (warManager == null) warManager = gameObject.AddComponent<CardadoWarManager>();\n'
+          if old in s:
+              s = s.replace(old, new, 1)
+          elif 'warManager = GetComponent<CardadoWarManager>();' not in s:
+              raise SystemExit('GameManager WarManager bootstrap pattern not found')
+
+          old = '        RoundResolutionCompleted?.Invoke();\n        SetPhase(CardadoGamePhase.WarResolution);\n'
+          new = '        RoundResolutionCompleted?.Invoke();\n        SetPhase(CardadoGamePhase.WarResolution);\n        if (warManager != null) warManager.EnsureWarPhaseInitialized();\n'
+          if old not in s:
+              raise SystemExit('GameManager ResolveRound pattern not found')
+          s = s.replace(old, new, 1)
+          gm.write_text(s)
+
+          wm = Path('Assets/1. Scripts/a. Game Manager/CardadoWarManager.cs')
+          s = wm.read_text()
+          marker = '    public bool IsWarInProgressForDevelopment() => WarInProgress;\n\n'
+          addition = '''    public bool IsWarInProgressForDevelopment() => WarInProgress;\n\n    private bool warPhaseInitialized;\n\n    public void EnsureWarPhaseInitialized()\n    {\n        if (gameManager == null) gameManager = FindFirstObjectByType<CardadoGameManager>();\n        if (gameManager == null || gameManager.Phase != CardadoGamePhase.WarResolution) return;\n        if (warPhaseInitialized) return;\n        BeginWarPhase();\n    }\n\n'''
+          if marker not in s:
+              raise SystemExit('WarManager insertion marker not found')
+          if 'public void EnsureWarPhaseInitialized()' not in s:
+              s = s.replace(marker, addition, 1)
+
+          old = '    private void BeginWarPhase()\n    {\n        CleanupContextWithoutApplyingResult();\n'
+          new = '    private void BeginWarPhase()\n    {\n        warPhaseInitialized = true;\n        Debug.Log("[Cardado] War phase initialized.");\n        CleanupContextWithoutApplyingResult();\n'
+          if old not in s:
+              raise SystemExit('WarManager BeginWarPhase pattern not found')
+          s = s.replace(old, new, 1)
+          wm.write_text(s)
+          PY
+      - name: Commit changes and remove workflow
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add 'Assets/1. Scripts/a. Game Manager/CardadoGameManager.cs' 'Assets/1. Scripts/a. Game Manager/CardadoWarManager.cs'
+          git commit -m "Fix War phase initialization"
+          git push
+          rm .github/workflows/fix-war-phase-init.yml
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add .github/workflows/fix-war-phase-init.yml
+          git commit -m "Remove temporary War initialization workflow"
+          git push
