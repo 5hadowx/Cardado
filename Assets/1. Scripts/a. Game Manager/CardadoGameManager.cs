@@ -67,6 +67,7 @@ public class CardadoGameManager : MonoBehaviour
         InitializeDeck();
         cardActionManager = GetComponent<CardadoCardActionManager>();
         if (cardActionManager == null) cardActionManager = gameObject.AddComponent<CardadoCardActionManager>();
+        if (GetComponent<CardadoWarManager>() == null) gameObject.AddComponent<CardadoWarManager>();
         if (GetComponent<CardadoCardActionDevelopmentOverlay>() == null) gameObject.AddComponent<CardadoCardActionDevelopmentOverlay>();
     }
 
