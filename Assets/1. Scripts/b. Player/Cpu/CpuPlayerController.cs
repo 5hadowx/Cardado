@@ -267,19 +267,158 @@ public sealed class CpuPlayerController : CardadoPlayerController
 
         if (warManager.PendingChoice != CardadoWarPendingChoice.None)
         {
+            if (ResolveWarPendingChoice()) return;
             if (debugLogging)
-                Debug.LogWarning($"[Cardado][CPU] Player {PlayerIndex + 1} reached unsupported War pending choice {warManager.PendingChoice}; War card actions are skipped by the initial CPU War policy.", this);
+                Debug.LogWarning($"[Cardado][CPU] Player {PlayerIndex + 1} could not resolve War pending choice {warManager.PendingChoice}.", this);
             return;
         }
 
         if (warManager.IsWarCardActionPending)
         {
+            int cardIndex = strategy.ChooseWarCard(context, warManager.Context.CurrentPlayer.Cards);
+            if (cardIndex >= 0 && warManager.TryPlayWarCard(PlayerIndex, cardIndex))
+            {
+                LogWar($"played War card {cardIndex}");
+                return;
+            }
+
             if (warManager.TrySkipCardAction(PlayerIndex)) LogWar("skipped War card action");
             return;
         }
 
         int dieIndex = strategy.ChooseWarDie(warManager.Context.CurrentPlayer.Dice, warManager.Context.CurrentPlayer.PlayedDice);
         if (dieIndex >= 0 && warManager.TryPlayWarDieForPlayer(PlayerIndex, dieIndex)) LogWar($"played War die {dieIndex}");
+    }
+
+    private bool ResolveWarPendingChoice()
+    {
+        CardadoWarPendingChoice choice = warManager.PendingChoice;
+        CardadoWarContext.Participant actor = warManager.PendingChoiceActor;
+        if (actor == null) return false;
+
+        CardadoWarContext.Participant opponent = warManager.Context.OpponentOf(actor);
+
+        switch (choice)
+        {
+            case CardadoWarPendingChoice.ModifierTarget:
+            {
+                int die = FindBestWarDie(actor, true);
+                return die >= 0 && warManager.TryChooseModifierDie(actor.PlayerIndex, die);
+            }
+            case CardadoWarPendingChoice.ModifierSign:
+                return warManager.TryChooseModifierValue(1);
+            case CardadoWarPendingChoice.ArtistDie:
+            {
+                int die = FindBestWarDie(actor, true);
+                return die >= 0 && warManager.TryChooseArtistDie(die);
+            }
+            case CardadoWarPendingChoice.KnightDie:
+            {
+                int die = FindBestWarDie(opponent, true);
+                return die >= 0 && warManager.TryChooseKnightDie(die);
+            }
+            case CardadoWarPendingChoice.CollectorOpponentCard:
+                return opponent.Cards.Count > 0 && warManager.TryChooseCollectorCard(0);
+            case CardadoWarPendingChoice.BodyguardDie:
+            {
+                int die = FindBestWarDie(actor, true);
+                return die >= 0 && warManager.TryChooseWarBodyguardDie(die);
+            }
+            case CardadoWarPendingChoice.MirrorOwnDie:
+            {
+                int die = FindBestWarDie(actor, true);
+                return die >= 0 && warManager.TryChooseMirrorOwnDie(die);
+            }
+            case CardadoWarPendingChoice.MirrorOpponentDie:
+            {
+                int die = FindBestWarDie(opponent, true);
+                return die >= 0 && warManager.TryChooseMirrorOpponentDie(die);
+            }
+            case CardadoWarPendingChoice.JokerPlayer:
+                return warManager.TryChooseJokerTarget(true);
+            case CardadoWarPendingChoice.JokerDie:
+            {
+                CardadoWarContext.Participant target = warManager.GetJokerTargetForDevelopment();
+                int die = FindBestWarDie(target, true);
+                return target != null && die >= 0 && warManager.TryChooseJokerDie(die);
+            }
+            case CardadoWarPendingChoice.SpecialArtistMode:
+                return warManager.TryChooseSpecialArtistMode(true);
+            case CardadoWarPendingChoice.SpecialArtistDie:
+            {
+                int die = FindBestWarDie(actor, true);
+                return die >= 0 && warManager.TryChooseSpecialArtistDie(die);
+            }
+            case CardadoWarPendingChoice.SpecialArtistResult:
+                return warManager.TryChooseSpecialArtistResult(ChooseBestArtistResult());
+            case CardadoWarPendingChoice.SpecialKnightMode:
+                return warManager.TryChooseSpecialKnightMode(true);
+            case CardadoWarPendingChoice.SpecialKnightDie:
+            {
+                int die = FindBestWarDie(opponent, true);
+                return die >= 0 && warManager.TryChooseSpecialKnightDie(die);
+            }
+            case CardadoWarPendingChoice.SpecialCollectorMode:
+                return warManager.TryChooseSpecialCollectorMode(false);
+            case CardadoWarPendingChoice.SpecialCollectorOwnCard:
+                return actor.Cards.Count > 0 && warManager.TryChooseSpecialCollectorOwnCard(0);
+            case CardadoWarPendingChoice.SpecialCollectorOpponentCard:
+                return opponent.Cards.Count > 0 && warManager.TryChooseSpecialCollectorOpponentCard(0);
+            case CardadoWarPendingChoice.SpecialCollectorPlayChoice:
+                return warManager.TryChooseSpecialCollectorPlayedCard(warManager.PendingCollectorOwnSelected);
+            case CardadoWarPendingChoice.SpecialBodyguardMode:
+                return warManager.TryChooseSpecialBodyguardMode(true);
+            case CardadoWarPendingChoice.SpecialMirrorMode:
+                return warManager.TryChooseSpecialMirrorMode(true);
+            case CardadoWarPendingChoice.SpecialMirrorOwnDie:
+            {
+                int die = FindBestWarDie(actor, true);
+                return die >= 0 && warManager.TryChooseSpecialMirrorOwnDie(die);
+            }
+            case CardadoWarPendingChoice.SpecialMirrorOpponentDie:
+            {
+                int die = FindBestWarDie(opponent, true);
+                return die >= 0 && warManager.TryChooseSpecialMirrorOpponentDie(die);
+            }
+            case CardadoWarPendingChoice.NoblemanEffect:
+                return warManager.TryChooseNoblemanEffect(CardType.Artist);
+            default:
+                return false;
+        }
+    }
+
+    private int FindBestWarDie(CardadoWarContext.Participant participant, bool highest)
+    {
+        if (participant == null) return -1;
+        int selected = -1;
+        int selectedValue = highest ? int.MinValue : int.MaxValue;
+        for (int i = 0; i < participant.Dice.Count; i++)
+        {
+            if (!warManager.IsWarDieTargetable(participant.PlayerIndex, i)) continue;
+            int value = participant.Dice[i];
+            if ((highest && value > selectedValue) || (!highest && value < selectedValue))
+            {
+                selected = i;
+                selectedValue = value;
+            }
+        }
+        return selected;
+    }
+
+    private int ChooseBestArtistResult()
+    {
+        int bestIndex = 0;
+        int bestValue = warManager.GetPendingArtistResult(0);
+        for (int i = 1; i < 3; i++)
+        {
+            int value = warManager.GetPendingArtistResult(i);
+            if (value > bestValue)
+            {
+                bestValue = value;
+                bestIndex = i;
+            }
+        }
+        return bestIndex;
     }
 
     private void LogWar(string action)
