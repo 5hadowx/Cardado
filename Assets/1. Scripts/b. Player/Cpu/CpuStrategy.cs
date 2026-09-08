@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 /// <summary>
 /// Produces CPU decisions from a player-perspective context.
@@ -50,44 +51,86 @@ public readonly struct CpuCardDecision
 }
 
 /// <summary>
-/// Restricted decision input. It intentionally exposes only the CPU player's
-/// own state plus public match information.
+/// Restricted decision input. It contains a snapshot of the CPU player's
+/// private state plus only public match information. It intentionally does
+/// not retain a GameManager reference or expose the Players collection.
 /// </summary>
 public sealed class CpuDecisionContext
 {
-    private readonly CardadoGameManager gameManager;
     private readonly int playerIndex;
+    private readonly string playerId;
+    private readonly int chips;
+    private readonly int diceBid;
+    private readonly int handsWon;
+    private readonly bool hasPlacedBid;
+    private readonly List<int> dice;
+    private readonly List<bool> playedDice;
+    private readonly List<CardInstance> hand;
+    private readonly CardadoGamePhase phase;
+    private readonly int playerCount;
+    private readonly int currentHandNumber;
+    private readonly int currentHandPlayerIndex;
+    private readonly int roundDiceCount;
+    private readonly int roundCardCount;
+    private readonly int dealerPlayerIndex;
+    private readonly int startingPlayerIndex;
 
-    public CardadoGameManager GameManager => gameManager;
     public int PlayerIndex => playerIndex;
-    public CardadoPlayerState Player => gameManager.Players[playerIndex];
-    public CardadoGamePhase Phase => gameManager.Phase;
-    public int PlayerCount => gameManager.Players.Count;
-    public int CurrentHandNumber => gameManager.CurrentHandNumber;
-    public int CurrentHandPlayerIndex => gameManager.CurrentHandPlayerIndex;
-    public int RoundDiceCount => gameManager.RoundDiceCount;
-    public int RoundCardCount => gameManager.RoundCardCount;
+    public string PlayerId => playerId;
+    public int Chips => chips;
+    public int DiceBid => diceBid;
+    public int HandsWon => handsWon;
+    public bool HasPlacedBid => hasPlacedBid;
+    public IReadOnlyList<int> Dice => dice;
+    public IReadOnlyList<bool> PlayedDice => playedDice;
+    public IReadOnlyList<CardInstance> Hand => hand;
+    public CardadoGamePhase Phase => phase;
+    public int PlayerCount => playerCount;
+    public int CurrentHandNumber => currentHandNumber;
+    public int CurrentHandPlayerIndex => currentHandPlayerIndex;
+    public int RoundDiceCount => roundDiceCount;
+    public int RoundCardCount => roundCardCount;
+    public int DealerPlayerIndex => dealerPlayerIndex;
+    public int StartingPlayerIndex => startingPlayerIndex;
+    public bool IsOwnTurn => CurrentHandPlayerIndex == PlayerIndex;
 
     public CpuDecisionContext(CardadoGameManager manager, int index)
     {
         if (manager == null) throw new ArgumentNullException(nameof(manager));
         if (index < 0 || index >= manager.Players.Count) throw new ArgumentOutOfRangeException(nameof(index));
-        gameManager = manager;
-        playerIndex = index;
-    }
 
-    public bool IsOwnTurn => CurrentHandPlayerIndex == playerIndex;
+        CardadoPlayerState player = manager.Players[index];
+        playerIndex = index;
+        playerId = player.playerId;
+        chips = player.chips;
+        diceBid = player.diceBid;
+        handsWon = player.handsWon;
+        hasPlacedBid = player.hasPlacedBid;
+        dice = new List<int>(player.dice);
+        playedDice = new List<bool>(player.playedDice);
+        hand = player.hand == null || player.hand.cardsInHand == null
+            ? new List<CardInstance>()
+            : new List<CardInstance>(player.hand.cardsInHand);
+        phase = manager.Phase;
+        playerCount = manager.Players.Count;
+        currentHandNumber = manager.CurrentHandNumber;
+        currentHandPlayerIndex = manager.CurrentHandPlayerIndex;
+        roundDiceCount = manager.RoundDiceCount;
+        roundCardCount = manager.RoundCardCount;
+        dealerPlayerIndex = manager.DealerPlayerIndex;
+        startingPlayerIndex = manager.StartingPlayerIndex;
+    }
 
     public int FindBestAvailableDieIndex()
     {
         int bestIndex = -1;
         int bestValue = int.MinValue;
-        for (int i = 0; i < Player.dice.Count; i++)
+        for (int i = 0; i < Dice.Count; i++)
         {
-            if (!gameManager.IsDieAvailable(playerIndex, i)) continue;
-            if (Player.dice[i] > bestValue)
+            if (i < PlayedDice.Count && PlayedDice[i]) continue;
+            if (Dice[i] > bestValue)
             {
-                bestValue = Player.dice[i];
+                bestValue = Dice[i];
                 bestIndex = i;
             }
         }
@@ -101,7 +144,7 @@ public sealed class BalancedCpuStrategy : CpuStrategy
 
     public override int ChoosePrediction(CpuDecisionContext context)
     {
-        int availableDice = context.Player.dice.Count;
+        int availableDice = context.Dice.Count;
         return Math.Min(context.RoundDiceCount, Math.Max(0, availableDice / 2));
     }
 }
@@ -112,7 +155,7 @@ public sealed class AggressiveCpuStrategy : CpuStrategy
 
     public override int ChoosePrediction(CpuDecisionContext context)
     {
-        return Math.Min(context.RoundDiceCount, Math.Max(0, context.Player.dice.Count));
+        return Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count));
     }
 }
 
@@ -122,7 +165,7 @@ public sealed class ConservativeCpuStrategy : CpuStrategy
 
     public override int ChoosePrediction(CpuDecisionContext context)
     {
-        return Math.Min(context.RoundDiceCount, Math.Max(0, context.Player.dice.Count / 3));
+        return Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count / 3));
     }
 }
 
@@ -132,6 +175,6 @@ public sealed class OpportunisticCpuStrategy : CpuStrategy
 
     public override int ChoosePrediction(CpuDecisionContext context)
     {
-        return Math.Min(context.RoundDiceCount, Math.Max(0, context.Player.dice.Count / 2));
+        return Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count / 2));
     }
 }
