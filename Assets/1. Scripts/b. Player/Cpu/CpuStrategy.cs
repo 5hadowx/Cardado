@@ -35,6 +35,47 @@ public abstract class CpuStrategy
 
     public virtual bool ChooseWarOrder(CpuDecisionContext context) => true;
 
+    /// <summary>
+    /// Selects one of the CPU's private War cards. The WarManager remains
+    /// responsible for validating and resolving the selected card.
+    /// </summary>
+    public virtual int ChooseWarCard(CpuDecisionContext context, IReadOnlyList<CardInstance> cards)
+    {
+        int bestIndex = -1;
+        int bestScore = int.MinValue;
+        for (int i = 0; i < cards.Count; i++)
+        {
+            CardInstance card = cards[i];
+            if (card == null || card.data == null || card.data.isBlankCard) continue;
+
+            int score = ScoreWarCard(card.data.cardType);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+        return bestIndex;
+    }
+
+    protected virtual int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.King: return 90;
+            case CardType.Queen: return 85;
+            case CardType.Artist: return 70;
+            case CardType.Knight: return 70;
+            case CardType.Bodyguard: return 65;
+            case CardType.Mirror: return 65;
+            case CardType.Collector: return 60;
+            case CardType.Executioner: return 75;
+            case CardType.Joker: return 68;
+            case CardType.GordonRobleys: return 72;
+            default: return 20;
+        }
+    }
+
     public virtual int ChooseWarDie(IReadOnlyList<int> dice, IReadOnlyList<bool> playedDice)
     {
         int bestIndex = -1;
@@ -202,6 +243,20 @@ public sealed class AggressiveCpuStrategy : CpuStrategy
         return context.GetClosestLegalPrediction(preferred);
     }
     public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 1;
+
+    protected override int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.Executioner:
+            case CardType.Knight:
+            case CardType.Joker:
+            case CardType.Mirror: return 100;
+            case CardType.King:
+            case CardType.Queen: return 90;
+            default: return base.ScoreWarCard(cardType);
+        }
+    }
 }
 
 public sealed class ConservativeCpuStrategy : CpuStrategy
@@ -213,6 +268,18 @@ public sealed class ConservativeCpuStrategy : CpuStrategy
         return context.GetClosestLegalPrediction(preferred);
     }
     public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 3;
+
+    protected override int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.Bodyguard:
+            case CardType.King: return 100;
+            case CardType.Queen:
+            case CardType.Artist: return 85;
+            default: return base.ScoreWarCard(cardType);
+        }
+    }
 }
 
 public sealed class OpportunisticCpuStrategy : CpuStrategy
@@ -224,4 +291,16 @@ public sealed class OpportunisticCpuStrategy : CpuStrategy
         return context.GetClosestLegalPrediction(preferred);
     }
     public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 1;
+
+    protected override int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.Mirror:
+            case CardType.Joker:
+            case CardType.Collector:
+            case CardType.GordonRobleys: return 100;
+            default: return base.ScoreWarCard(cardType);
+        }
+    }
 }
