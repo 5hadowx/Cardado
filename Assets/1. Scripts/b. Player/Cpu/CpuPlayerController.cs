@@ -183,9 +183,8 @@ public sealed class CpuPlayerController : CardadoPlayerController
             return;
         }
 
-        if (warStage == CpuWarStage.Resolve)
+        if (warStage == CpuWarStage.Resolve && warManager.Context == null)
         {
-            if (warManager.Context != null) return;
             if (warManager.CurrentWarClaimantIndex < 0)
             {
                 if (warManager.TryFinishWarPhase())
