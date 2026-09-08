@@ -7,7 +7,6 @@ using UnityEngine;
 /// </summary>
 public sealed class CpuPlayerController : CardadoPlayerController
 {
-    [SerializeField, Min(0)] private int configuredPlayerIndex;
     [SerializeField, Min(0f)] private float thinkingDelay = 0.5f;
     [SerializeField] private CpuProfile profile = CpuProfile.Balanced;
     [SerializeField] private bool randomizeProfile = true;
@@ -19,7 +18,6 @@ public sealed class CpuPlayerController : CardadoPlayerController
 
     public CpuProfile Profile => strategy != null ? strategy.Profile : profile;
     public float ThinkingDelay => thinkingDelay;
-    public int ConfiguredPlayerIndex => configuredPlayerIndex;
 
     private void Start()
     {
@@ -32,13 +30,13 @@ public sealed class CpuPlayerController : CardadoPlayerController
             return;
         }
 
-        if (configuredPlayerIndex < 0 || configuredPlayerIndex >= manager.Players.Count)
+        if (PlayerIndex < 0 || PlayerIndex >= manager.Players.Count)
         {
-            Debug.LogWarning($"[Cardado][CPU] Configured player index {configuredPlayerIndex} is outside the current player range.", this);
+            Debug.LogWarning($"[Cardado][CPU] Configured player index {PlayerIndex} is outside the current player range.", this);
             return;
         }
 
-        Bind(manager, configuredPlayerIndex);
+        Bind(manager, PlayerIndex);
     }
 
     protected override void OnBound()
