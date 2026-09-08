@@ -208,25 +208,46 @@ public sealed class CpuPlayerController : CardadoPlayerController
         if (warManager.Context == null)
         {
             int claimant = warManager.CurrentWarClaimantIndex;
-            if (claimant < 0)
+            if (claimant >= 0)
             {
-                if (warManager.TryFinishWarPhase()) LogWar("finished War phase");
+                if (claimant != PlayerIndex) return;
+
+                if (!warManager.CanClaimWar(PlayerIndex) || !strategy.ShouldDeclareWar(context))
+                {
+                    if (warManager.TryPassWar(PlayerIndex)) LogWar("passed War claim");
+                    return;
+                }
+
+                if (warManager.TryClaimWar(PlayerIndex))
+                {
+                    warChallengerIndex = PlayerIndex;
+                    warStage = CpuWarStage.Target;
+                    LogWar("declared War");
+                }
                 return;
             }
-            if (claimant != PlayerIndex) return;
 
-            if (!warManager.CanClaimWar(PlayerIndex) || !strategy.ShouldDeclareWar(context))
+            // During the initial claim step CurrentWarClaimantIndex can be -1 because
+            // CardadoWarManager uses the War turn slot for that property. Submit the
+            // normal claim/pass request anyway and let the rules layer identify the
+            // actual claimant. If no claimant remains, finish the War phase.
+            if (warManager.CanClaimWar(PlayerIndex) && strategy.ShouldDeclareWar(context))
             {
-                if (warManager.TryPassWar(PlayerIndex)) LogWar("passed War claim");
+                if (warManager.TryClaimWar(PlayerIndex))
+                {
+                    warChallengerIndex = PlayerIndex;
+                    warStage = CpuWarStage.Target;
+                    LogWar("declared War");
+                    return;
+                }
+            }
+            else if (warManager.TryPassWar(PlayerIndex))
+            {
+                LogWar("passed War claim");
                 return;
             }
 
-            if (warManager.TryClaimWar(PlayerIndex))
-            {
-                warChallengerIndex = PlayerIndex;
-                warStage = CpuWarStage.Target;
-                LogWar("declared War");
-            }
+            if (warManager.TryFinishWarPhase()) LogWar("finished War phase");
             return;
         }
 
