@@ -13,6 +13,35 @@ public abstract class CpuStrategy
     public virtual CpuCardDecision ChooseCardAction(CpuDecisionContext context) => CpuCardDecision.Skip;
 
     public virtual int ChooseDie(CpuDecisionContext context) => context.FindBestAvailableDieIndex();
+
+    public virtual bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 2;
+
+    public virtual int ChooseWarTarget(CpuDecisionContext context, int challengerIndex)
+    {
+        int bestIndex = -1;
+        int bestChips = int.MaxValue;
+        for (int i = 0; i < context.PlayerCount; i++)
+        {
+            if (i == challengerIndex || context.GetPublicChips(i) < 1) continue;
+            int chips = context.GetPublicChips(i);
+            if (chips < bestChips) { bestChips = chips; bestIndex = i; }
+        }
+        return bestIndex;
+    }
+
+    public virtual bool ChooseWarOrder(CpuDecisionContext context) => true;
+
+    public virtual int ChooseWarDie(IReadOnlyList<int> dice, IReadOnlyList<bool> playedDice)
+    {
+        int bestIndex = -1;
+        int bestValue = int.MinValue;
+        for (int i = 0; i < dice.Count; i++)
+        {
+            if (i < playedDice.Count && playedDice[i]) continue;
+            if (dice[i] > bestValue) { bestValue = dice[i]; bestIndex = i; }
+        }
+        return bestIndex;
+    }
 }
 
 public enum CpuProfile { Balanced, Aggressive, Conservative, Opportunistic }
@@ -42,6 +71,7 @@ public sealed class CpuDecisionContext
     private readonly List<int> dice;
     private readonly List<bool> playedDice;
     private readonly List<CardInstance> hand;
+    private readonly List<int> publicChips;
     private readonly CardadoGamePhase phase;
     private readonly int playerCount;
     private readonly int currentHandNumber;
@@ -89,6 +119,9 @@ public sealed class CpuDecisionContext
         hand = player.hand == null || player.hand.cardsInHand == null
             ? new List<CardInstance>()
             : new List<CardInstance>(player.hand.cardsInHand);
+        publicChips = new List<int>(manager.Players.Count);
+        for (int i = 0; i < manager.Players.Count; i++) publicChips.Add(manager.Players[i].chips);
+
         phase = manager.Phase;
         playerCount = manager.Players.Count;
         currentHandNumber = manager.CurrentHandNumber;
@@ -107,6 +140,11 @@ public sealed class CpuDecisionContext
         placedDicePredictionTotalExcludingSelf = placedTotal;
     }
 
+    public int GetPublicChips(int index)
+    {
+        return index >= 0 && index < publicChips.Count ? publicChips[index] : 0;
+    }
+
     public bool IsPredictionLegal(int prediction)
     {
         if (prediction < 0 || prediction > RoundDiceCount) return false;
@@ -118,7 +156,6 @@ public sealed class CpuDecisionContext
     {
         int clamped = Math.Max(0, Math.Min(RoundDiceCount, preferredPrediction));
         if (IsPredictionLegal(clamped)) return clamped;
-
         for (int distance = 1; distance <= RoundDiceCount; distance++)
         {
             int lower = clamped - distance;
@@ -160,6 +197,7 @@ public sealed class AggressiveCpuStrategy : CpuStrategy
         int preferred = Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count));
         return context.GetClosestLegalPrediction(preferred);
     }
+    public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 1;
 }
 
 public sealed class ConservativeCpuStrategy : CpuStrategy
@@ -170,6 +208,7 @@ public sealed class ConservativeCpuStrategy : CpuStrategy
         int preferred = Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count / 3));
         return context.GetClosestLegalPrediction(preferred);
     }
+    public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 3;
 }
 
 public sealed class OpportunisticCpuStrategy : CpuStrategy
@@ -180,4 +219,5 @@ public sealed class OpportunisticCpuStrategy : CpuStrategy
         int preferred = Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count / 2));
         return context.GetClosestLegalPrediction(preferred);
     }
+    public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 1;
 }
