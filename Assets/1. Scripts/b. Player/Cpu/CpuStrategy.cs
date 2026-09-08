@@ -10,6 +10,10 @@ public abstract class CpuStrategy
     public abstract CpuProfile Profile { get; }
     public abstract int ChoosePrediction(CpuDecisionContext context);
 
+    public virtual int ChooseDealerDiceCount(CpuDecisionContext context) => 3;
+
+    public virtual int ChooseDealerCardCount(CpuDecisionContext context) => 3;
+
     public virtual CpuCardDecision ChooseCardAction(CpuDecisionContext context) => CpuCardDecision.Skip;
 
     public virtual int ChooseDie(CpuDecisionContext context) => context.FindBestAvailableDieIndex();
