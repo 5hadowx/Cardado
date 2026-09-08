@@ -122,13 +122,14 @@ public sealed class CpuPlayerController : CardadoPlayerController
         if (GameManager.Phase == CardadoGamePhase.DealerSetupDecision)
         {
             if (!GameManager.PendingDealerDecision.HasValue) return;
-            int choice = GameManager.PendingDealerDecision.Value == RoundSetupDecisionType.ChooseDiceCount
+            RoundSetupDecisionType decisionType = GameManager.PendingDealerDecision.Value;
+            int choice = decisionType == RoundSetupDecisionType.ChooseDiceCount
                 ? strategy.ChooseDealerDiceCount(context)
                 : strategy.ChooseDealerCardCount(context);
             choice = Math.Max(1, Math.Min(5, choice));
             GameManager.ResolveDealerChoice(choice);
             if (debugLogging)
-                Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} dealer setup: chose {choice} for {GameManager.PendingDealerDecision.GetValueOrDefault()}.", this);
+                Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} dealer setup: chose {choice} for {decisionType}.", this);
             return;
         }
 
