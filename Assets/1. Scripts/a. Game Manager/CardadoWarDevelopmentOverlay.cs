@@ -52,7 +52,9 @@ public sealed class CardadoWarDevelopmentOverlay : MonoBehaviour
     {
         if (gameManager == null || warManager == null || gameManager.Phase != CardadoGamePhase.WarResolution) return;
 
-        GUILayout.BeginArea(new Rect(Screen.width - 540, 20, 520, Screen.height - 40), GUI.skin.box);
+        // Keep War controls in the dedicated left-side board area so they do not
+        // overlap the persistent player-details presentation on the right.
+        GUILayout.BeginArea(new Rect(20f, 50f, 485f, Screen.height - 70f), GUI.skin.box);
         GUILayout.Label("WAR");
 
         if (warWasStarted && warManager.Context == null)
