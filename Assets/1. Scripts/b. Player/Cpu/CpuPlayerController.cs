@@ -7,6 +7,7 @@ using UnityEngine;
 /// </summary>
 public sealed class CpuPlayerController : CardadoPlayerController
 {
+    [SerializeField, Min(0)] private int playerIndex;
     [SerializeField, Min(0f)] private float thinkingDelay = 0.5f;
     [SerializeField] private CpuProfile profile = CpuProfile.Balanced;
     [SerializeField] private bool randomizeProfile = true;
@@ -18,12 +19,36 @@ public sealed class CpuPlayerController : CardadoPlayerController
 
     public CpuProfile Profile => strategy != null ? strategy.Profile : profile;
     public float ThinkingDelay => thinkingDelay;
+    public int ConfiguredPlayerIndex => playerIndex;
+
+    private void Start()
+    {
+        if (IsBound) return;
+
+        CardadoGameManager manager = FindFirstObjectByType<CardadoGameManager>();
+        if (manager == null)
+        {
+            Debug.LogWarning("[Cardado][CPU] No CardadoGameManager found; CPU controller could not bind.", this);
+            return;
+        }
+
+        if (playerIndex < 0 || playerIndex >= manager.Players.Count)
+        {
+            Debug.LogWarning($"[Cardado][CPU] Configured player index {playerIndex} is outside the current player range.", this);
+            return;
+        }
+
+        Bind(manager, playerIndex);
+    }
 
     protected override void OnBound()
     {
         strategy = CreateStrategy(ResolveProfile());
         decisionPending = false;
         decisionReadyAt = -1f;
+
+        if (debugLogging)
+            Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} bound with profile={Profile}.", this);
     }
 
     protected override void OnUnbound()
