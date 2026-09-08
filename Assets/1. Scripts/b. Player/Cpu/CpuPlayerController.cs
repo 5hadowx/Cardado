@@ -7,14 +7,7 @@ using UnityEngine;
 /// </summary>
 public sealed class CpuPlayerController : CardadoPlayerController
 {
-    private enum CpuWarStage
-    {
-        None,
-        Target,
-        Wager,
-        Order,
-        Resolve
-    }
+    private enum CpuWarStage { None, Target, Wager, Order, Resolve }
 
     [SerializeField, Min(0f)] private float thinkingDelay = 0.5f;
     [SerializeField] private CpuProfile profile = CpuProfile.Balanced;
@@ -34,20 +27,17 @@ public sealed class CpuPlayerController : CardadoPlayerController
     private void Start()
     {
         if (IsBound) return;
-
         CardadoGameManager manager = FindFirstObjectByType<CardadoGameManager>();
         if (manager == null)
         {
             Debug.LogWarning("[Cardado][CPU] No CardadoGameManager found; CPU controller could not bind.", this);
             return;
         }
-
         if (PlayerIndex < 0 || PlayerIndex >= manager.Players.Count)
         {
             Debug.LogWarning($"[Cardado][CPU] Configured player index {PlayerIndex} is outside the current player range.", this);
             return;
         }
-
         Bind(manager, PlayerIndex);
     }
 
@@ -59,9 +49,7 @@ public sealed class CpuPlayerController : CardadoPlayerController
         decisionReadyAt = -1f;
         warStage = CpuWarStage.None;
         warChallengerIndex = -1;
-
-        if (debugLogging)
-            Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} bound with profile={Profile}.", this);
+        if (debugLogging) Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} bound with profile={Profile}.", this);
     }
 
     protected override void OnUnbound()
@@ -98,7 +86,6 @@ public sealed class CpuPlayerController : CardadoPlayerController
             decisionReadyAt = Time.time + thinkingDelay;
             return;
         }
-
         if (Time.time < decisionReadyAt) return;
         decisionPending = false;
         decisionReadyAt = -1f;
@@ -118,8 +105,7 @@ public sealed class CpuPlayerController : CardadoPlayerController
             if (warManager == null) return false;
             if (warStage != CpuWarStage.None) return true;
             if (warManager.Context != null)
-                return warManager.Context.CurrentPlayer != null &&
-                       warManager.Context.CurrentPlayer.PlayerIndex == PlayerIndex;
+                return warManager.Context.CurrentPlayer != null && warManager.Context.CurrentPlayer.PlayerIndex == PlayerIndex;
             return warManager.CurrentWarClaimantIndex == PlayerIndex || warManager.CurrentWarClaimantIndex < 0;
         }
 
@@ -146,7 +132,6 @@ public sealed class CpuPlayerController : CardadoPlayerController
                 if (debugLogging) Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} played card index {cardDecision.CardIndex}.");
                 return;
             }
-
             if (debugLogging) Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} skipped card action.");
             RequestSkipCardAction();
             return;
@@ -160,8 +145,7 @@ public sealed class CpuPlayerController : CardadoPlayerController
             return;
         }
 
-        if (GameManager.Phase == CardadoGamePhase.WarResolution)
-            MakeWarDecision(context);
+        if (GameManager.Phase == CardadoGamePhase.WarResolution) MakeWarDecision(context);
     }
 
     private void MakeWarDecision(CpuDecisionContext context)
@@ -202,7 +186,6 @@ public sealed class CpuPlayerController : CardadoPlayerController
         if (warStage == CpuWarStage.Resolve)
         {
             if (warManager.Context != null) return;
-
             if (warManager.CurrentWarClaimantIndex < 0)
             {
                 if (warManager.TryFinishWarPhase())
@@ -213,7 +196,6 @@ public sealed class CpuPlayerController : CardadoPlayerController
                 }
                 return;
             }
-
             if (warManager.TryContinueWarPhase())
             {
                 warStage = CpuWarStage.None;
@@ -226,15 +208,14 @@ public sealed class CpuPlayerController : CardadoPlayerController
         if (warManager.Context == null)
         {
             int claimant = warManager.CurrentWarClaimantIndex;
-            if (claimant != PlayerIndex) return;
-
-            if (!warManager.CanClaimWar(PlayerIndex))
+            if (claimant < 0)
             {
-                if (warManager.TryPassWar(PlayerIndex)) LogWar("passed War claim");
+                if (warManager.TryFinishWarPhase()) LogWar("finished War phase");
                 return;
             }
+            if (claimant != PlayerIndex) return;
 
-            if (!strategy.ShouldDeclareWar(context))
+            if (!warManager.CanClaimWar(PlayerIndex) || !strategy.ShouldDeclareWar(context))
             {
                 if (warManager.TryPassWar(PlayerIndex)) LogWar("passed War claim");
                 return;
@@ -249,8 +230,7 @@ public sealed class CpuPlayerController : CardadoPlayerController
             return;
         }
 
-        if (warManager.Context.CurrentPlayer == null || warManager.Context.CurrentPlayer.PlayerIndex != PlayerIndex)
-            return;
+        if (warManager.Context.CurrentPlayer == null || warManager.Context.CurrentPlayer.PlayerIndex != PlayerIndex) return;
 
         if (warManager.PendingChoice != CardadoWarPendingChoice.None)
         {
@@ -265,17 +245,13 @@ public sealed class CpuPlayerController : CardadoPlayerController
             return;
         }
 
-        int dieIndex = strategy.ChooseWarDie(
-            warManager.Context.CurrentPlayer.Dice,
-            warManager.Context.CurrentPlayer.PlayedDice);
-        if (dieIndex >= 0 && warManager.TryPlayWarDieForPlayer(PlayerIndex, dieIndex))
-            LogWar($"played War die {dieIndex}");
+        int dieIndex = strategy.ChooseWarDie(warManager.Context.CurrentPlayer.Dice, warManager.Context.CurrentPlayer.PlayedDice);
+        if (dieIndex >= 0 && warManager.TryPlayWarDieForPlayer(PlayerIndex, dieIndex)) LogWar($"played War die {dieIndex}");
     }
 
     private void LogWar(string action)
     {
-        if (debugLogging)
-            Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} War: {action}.", this);
+        if (debugLogging) Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} War: {action}.", this);
     }
 
     private CpuProfile ResolveProfile()
