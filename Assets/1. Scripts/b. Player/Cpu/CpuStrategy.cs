@@ -1,0 +1,306 @@
+using System;
+using System.Collections.Generic;
+
+/// <summary>
+/// Produces CPU decisions from a player-perspective context.
+/// Strategy owns decision logic; it never mutates gameplay state.
+/// </summary>
+public abstract class CpuStrategy
+{
+    public abstract CpuProfile Profile { get; }
+    public abstract int ChoosePrediction(CpuDecisionContext context);
+
+    public virtual int ChooseDealerDiceCount(CpuDecisionContext context) => 3;
+
+    public virtual int ChooseDealerCardCount(CpuDecisionContext context) => 3;
+
+    public virtual CpuCardDecision ChooseCardAction(CpuDecisionContext context) => CpuCardDecision.Skip;
+
+    public virtual int ChooseDie(CpuDecisionContext context) => context.FindBestAvailableDieIndex();
+
+    public virtual bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 2;
+
+    public virtual int ChooseWarTarget(CpuDecisionContext context, int challengerIndex)
+    {
+        int bestIndex = -1;
+        int bestChips = int.MaxValue;
+        for (int i = 0; i < context.PlayerCount; i++)
+        {
+            if (i == challengerIndex || context.GetPublicChips(i) < 1) continue;
+            int chips = context.GetPublicChips(i);
+            if (chips < bestChips) { bestChips = chips; bestIndex = i; }
+        }
+        return bestIndex;
+    }
+
+    public virtual bool ChooseWarOrder(CpuDecisionContext context) => true;
+
+    /// <summary>
+    /// Selects one of the CPU's private War cards. The WarManager remains
+    /// responsible for validating and resolving the selected card.
+    /// </summary>
+    public virtual int ChooseWarCard(CpuDecisionContext context, IReadOnlyList<CardInstance> cards)
+    {
+        int bestIndex = -1;
+        int bestScore = int.MinValue;
+        for (int i = 0; i < cards.Count; i++)
+        {
+            CardInstance card = cards[i];
+            if (card == null || card.data == null || card.data.isBlankCard) continue;
+
+            int score = ScoreWarCard(card.data.cardType);
+            if (score > bestScore)
+            {
+                bestScore = score;
+                bestIndex = i;
+            }
+        }
+        return bestIndex;
+    }
+
+    protected virtual int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.King: return 90;
+            case CardType.Queen: return 85;
+            case CardType.Artist: return 70;
+            case CardType.Knight: return 70;
+            case CardType.Bodyguard: return 65;
+            case CardType.Mirror: return 65;
+            case CardType.Collector: return 60;
+            case CardType.Executioner: return 75;
+            case CardType.Joker: return 68;
+            case CardType.GordonRobleys: return 72;
+            default: return 20;
+        }
+    }
+
+    public virtual int ChooseWarDie(IReadOnlyList<int> dice, IReadOnlyList<bool> playedDice)
+    {
+        int bestIndex = -1;
+        int bestValue = int.MinValue;
+        for (int i = 0; i < dice.Count; i++)
+        {
+            if (i < playedDice.Count && playedDice[i]) continue;
+            if (dice[i] > bestValue) { bestValue = dice[i]; bestIndex = i; }
+        }
+        return bestIndex;
+    }
+}
+
+public enum CpuProfile { Balanced, Aggressive, Conservative, Opportunistic }
+public enum CpuCardDecisionType { Skip, Play }
+
+public readonly struct CpuCardDecision
+{
+    public static CpuCardDecision Skip => new CpuCardDecision(CpuCardDecisionType.Skip, -1);
+    public CpuCardDecisionType Type { get; }
+    public int CardIndex { get; }
+    public CpuCardDecision(CpuCardDecisionType type, int cardIndex) { Type = type; CardIndex = cardIndex; }
+}
+
+/// <summary>
+/// Restricted decision input. It contains a snapshot of the CPU player's
+/// private state plus only public match information. It intentionally does
+/// not retain a GameManager reference or expose the Players collection.
+/// </summary>
+public sealed class CpuDecisionContext
+{
+    private readonly int playerIndex;
+    private readonly string playerId;
+    private readonly int chips;
+    private readonly int diceBid;
+    private readonly int handsWon;
+    private readonly bool hasPlacedBid;
+    private readonly List<int> dice;
+    private readonly List<bool> playedDice;
+    private readonly List<CardInstance> hand;
+    private readonly List<int> publicChips;
+    private readonly CardadoGamePhase phase;
+    private readonly int playerCount;
+    private readonly int currentHandNumber;
+    private readonly int currentHandPlayerIndex;
+    private readonly int roundDiceCount;
+    private readonly int roundCardCount;
+    private readonly int dealerPlayerIndex;
+    private readonly int startingPlayerIndex;
+    private readonly int placedDicePredictionTotalExcludingSelf;
+
+    public int PlayerIndex => playerIndex;
+    public string PlayerId => playerId;
+    public int Chips => chips;
+    public int DiceBid => diceBid;
+    public int HandsWon => handsWon;
+    public bool HasPlacedBid => hasPlacedBid;
+    public IReadOnlyList<int> Dice => dice;
+    public IReadOnlyList<bool> PlayedDice => playedDice;
+    public IReadOnlyList<CardInstance> Hand => hand;
+    public CardadoGamePhase Phase => phase;
+    public int PlayerCount => playerCount;
+    public int CurrentHandNumber => currentHandNumber;
+    public int CurrentHandPlayerIndex => currentHandPlayerIndex;
+    public int RoundDiceCount => roundDiceCount;
+    public int RoundCardCount => roundCardCount;
+    public int DealerPlayerIndex => dealerPlayerIndex;
+    public int StartingPlayerIndex => startingPlayerIndex;
+    public int PlacedDicePredictionTotalExcludingSelf => placedDicePredictionTotalExcludingSelf;
+    public bool IsOwnTurn => CurrentHandPlayerIndex == PlayerIndex;
+
+    public CpuDecisionContext(CardadoGameManager manager, int index)
+    {
+        if (manager == null) throw new ArgumentNullException(nameof(manager));
+        if (index < 0 || index >= manager.Players.Count) throw new ArgumentOutOfRangeException(nameof(index));
+
+        CardadoPlayerState player = manager.Players[index];
+        playerIndex = index;
+        playerId = player.playerId;
+        chips = player.chips;
+        diceBid = player.diceBid;
+        handsWon = player.handsWon;
+        hasPlacedBid = player.hasPlacedBid;
+        dice = new List<int>(player.dice);
+        playedDice = new List<bool>(player.playedDice);
+        hand = player.hand == null || player.hand.cardsInHand == null
+            ? new List<CardInstance>()
+            : new List<CardInstance>(player.hand.cardsInHand);
+        publicChips = new List<int>(manager.Players.Count);
+        for (int i = 0; i < manager.Players.Count; i++) publicChips.Add(manager.Players[i].chips);
+
+        phase = manager.Phase;
+        playerCount = manager.Players.Count;
+        currentHandNumber = manager.CurrentHandNumber;
+        currentHandPlayerIndex = manager.CurrentHandPlayerIndex;
+        roundDiceCount = manager.RoundDiceCount;
+        roundCardCount = manager.RoundCardCount;
+        dealerPlayerIndex = manager.DealerPlayerIndex;
+        startingPlayerIndex = manager.StartingPlayerIndex;
+
+        int placedTotal = 0;
+        for (int i = 0; i < manager.Players.Count; i++)
+        {
+            if (i == index || !manager.Players[i].hasPlacedBid) continue;
+            placedTotal += manager.Players[i].diceBid;
+        }
+        placedDicePredictionTotalExcludingSelf = placedTotal;
+    }
+
+    public int GetPublicChips(int index)
+    {
+        return index >= 0 && index < publicChips.Count ? publicChips[index] : 0;
+    }
+
+    public bool IsPredictionLegal(int prediction)
+    {
+        if (prediction < 0 || prediction > RoundDiceCount) return false;
+        if (PlayerIndex != DealerPlayerIndex) return true;
+        return PlacedDicePredictionTotalExcludingSelf + prediction != RoundDiceCount;
+    }
+
+    public int GetClosestLegalPrediction(int preferredPrediction)
+    {
+        int clamped = Math.Max(0, Math.Min(RoundDiceCount, preferredPrediction));
+        if (IsPredictionLegal(clamped)) return clamped;
+        for (int distance = 1; distance <= RoundDiceCount; distance++)
+        {
+            int lower = clamped - distance;
+            if (lower >= 0 && IsPredictionLegal(lower)) return lower;
+            int upper = clamped + distance;
+            if (upper <= RoundDiceCount && IsPredictionLegal(upper)) return upper;
+        }
+        return -1;
+    }
+
+    public int FindBestAvailableDieIndex()
+    {
+        int bestIndex = -1;
+        int bestValue = int.MinValue;
+        for (int i = 0; i < Dice.Count; i++)
+        {
+            if (i < PlayedDice.Count && PlayedDice[i]) continue;
+            if (Dice[i] > bestValue) { bestValue = Dice[i]; bestIndex = i; }
+        }
+        return bestIndex;
+    }
+}
+
+public sealed class BalancedCpuStrategy : CpuStrategy
+{
+    public override CpuProfile Profile => CpuProfile.Balanced;
+    public override int ChoosePrediction(CpuDecisionContext context)
+    {
+        int preferred = Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count / 2));
+        return context.GetClosestLegalPrediction(preferred);
+    }
+}
+
+public sealed class AggressiveCpuStrategy : CpuStrategy
+{
+    public override CpuProfile Profile => CpuProfile.Aggressive;
+    public override int ChoosePrediction(CpuDecisionContext context)
+    {
+        int preferred = Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count));
+        return context.GetClosestLegalPrediction(preferred);
+    }
+    public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 1;
+
+    protected override int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.Executioner:
+            case CardType.Knight:
+            case CardType.Joker:
+            case CardType.Mirror: return 100;
+            case CardType.King:
+            case CardType.Queen: return 90;
+            default: return base.ScoreWarCard(cardType);
+        }
+    }
+}
+
+public sealed class ConservativeCpuStrategy : CpuStrategy
+{
+    public override CpuProfile Profile => CpuProfile.Conservative;
+    public override int ChoosePrediction(CpuDecisionContext context)
+    {
+        int preferred = Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count / 3));
+        return context.GetClosestLegalPrediction(preferred);
+    }
+    public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 3;
+
+    protected override int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.Bodyguard:
+            case CardType.King: return 100;
+            case CardType.Queen:
+            case CardType.Artist: return 85;
+            default: return base.ScoreWarCard(cardType);
+        }
+    }
+}
+
+public sealed class OpportunisticCpuStrategy : CpuStrategy
+{
+    public override CpuProfile Profile => CpuProfile.Opportunistic;
+    public override int ChoosePrediction(CpuDecisionContext context)
+    {
+        int preferred = Math.Min(context.RoundDiceCount, Math.Max(0, context.Dice.Count / 2));
+        return context.GetClosestLegalPrediction(preferred);
+    }
+    public override bool ShouldDeclareWar(CpuDecisionContext context) => context.Chips >= 1;
+
+    protected override int ScoreWarCard(CardType cardType)
+    {
+        switch (cardType)
+        {
+            case CardType.Mirror:
+            case CardType.Joker:
+            case CardType.Collector:
+            case CardType.GordonRobleys: return 100;
+            default: return base.ScoreWarCard(cardType);
+        }
+    }
+}
