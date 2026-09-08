@@ -94,6 +94,9 @@ public sealed class CpuPlayerController : CardadoPlayerController
 
     private bool IsDecisionOpportunity()
     {
+        if (GameManager.Phase == CardadoGamePhase.DealerSetupDecision)
+            return GameManager.DealerPlayerIndex == PlayerIndex && GameManager.PendingDealerDecision.HasValue;
+
         if (GameManager.Phase == CardadoGamePhase.Prediction)
             return GameManager.CurrentPredictionPlayerIndex == PlayerIndex;
 
@@ -115,6 +118,19 @@ public sealed class CpuPlayerController : CardadoPlayerController
     private void MakeDecision()
     {
         CpuDecisionContext context = new CpuDecisionContext(GameManager, PlayerIndex);
+
+        if (GameManager.Phase == CardadoGamePhase.DealerSetupDecision)
+        {
+            if (!GameManager.PendingDealerDecision.HasValue) return;
+            int choice = GameManager.PendingDealerDecision.Value == RoundSetupDecisionType.ChooseDiceCount
+                ? strategy.ChooseDealerDiceCount(context)
+                : strategy.ChooseDealerCardCount(context);
+            choice = Math.Max(1, Math.Min(5, choice));
+            GameManager.ResolveDealerChoice(choice);
+            if (debugLogging)
+                Debug.Log($"[Cardado][CPU] Player {PlayerIndex + 1} dealer setup: chose {choice} for {GameManager.PendingDealerDecision.GetValueOrDefault()}.", this);
+            return;
+        }
 
         if (GameManager.Phase == CardadoGamePhase.Prediction)
         {
@@ -226,10 +242,6 @@ public sealed class CpuPlayerController : CardadoPlayerController
                 return;
             }
 
-            // During the initial claim step CurrentWarClaimantIndex can be -1 because
-            // CardadoWarManager uses the War turn slot for that property. Submit the
-            // normal claim/pass request anyway and let the rules layer identify the
-            // actual claimant. If no claimant remains, finish the War phase.
             if (warManager.CanClaimWar(PlayerIndex) && strategy.ShouldDeclareWar(context))
             {
                 if (warManager.TryClaimWar(PlayerIndex))
