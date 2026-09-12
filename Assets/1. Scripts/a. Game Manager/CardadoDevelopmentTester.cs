@@ -21,6 +21,8 @@ public class CardadoDevelopmentTester : MonoBehaviour
     private GUIStyle titleStyle;
     private GUIStyle buttonStyle;
     private GUIStyle selectedButtonStyle;
+    private GUIStyle diceSummaryTitleStyle;
+    private GUIStyle diceSummaryDieStyle;
 
     private void Start()
     {
@@ -249,24 +251,24 @@ public class CardadoDevelopmentTester : MonoBehaviour
         Rect summary = new Rect(panel.x + 525f, panel.y + 68f, summaryWidth, summaryHeight);
 
         GUI.Box(summary, GUIContent.none, panelStyle);
-        GUI.Label(new Rect(summary.x + 10f, summary.y + 8f, summaryWidth - 20f, 28f), "YOUR ROLLED DICE", titleStyle);
+        GUI.Label(new Rect(summary.x + 10f, summary.y + 6f, summaryWidth - 20f, 32f), "YOUR ROLLED DICE", diceSummaryTitleStyle);
 
         if (player.dice == null || player.dice.Count == 0)
         {
-            GUI.Label(new Rect(summary.x + 10f, summary.y + 45f, summaryWidth - 20f, 30f), "No dice rolled.", GUI.skin.label);
+            GUI.Label(new Rect(summary.x + 10f, summary.y + 44f, summaryWidth - 20f, 30f), "No dice rolled.", GUI.skin.label);
             return;
         }
 
         float dieWidth = 48f;
-        float dieHeight = 42f;
+        float dieHeight = 50f;
         float gap = 8f;
         float totalWidth = player.dice.Count * dieWidth + Mathf.Max(0, player.dice.Count - 1) * gap;
         float startX = summary.x + (summaryWidth - totalWidth) * 0.5f;
 
         for (int dieIndex = 0; dieIndex < player.dice.Count; dieIndex++)
         {
-            Rect dieRect = new Rect(startX + dieIndex * (dieWidth + gap), summary.y + 48f, dieWidth, dieHeight);
-            GUI.Label(dieRect, $"D{dieIndex + 1}\n{player.dice[dieIndex]}", buttonStyle);
+            Rect dieRect = new Rect(startX + dieIndex * (dieWidth + gap), summary.y + 44f, dieWidth, dieHeight);
+            GUI.Label(dieRect, $"D{dieIndex + 1}\n{player.dice[dieIndex]}", diceSummaryDieStyle);
         }
     }
 
@@ -331,6 +333,21 @@ public class CardadoDevelopmentTester : MonoBehaviour
         titleStyle = new GUIStyle(GUI.skin.label) { fontSize = 24, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
         buttonStyle = new GUIStyle(GUI.skin.button) { fontSize = 22, fontStyle = FontStyle.Bold };
         selectedButtonStyle = new GUIStyle(buttonStyle) { fontSize = 22, fontStyle = FontStyle.Bold };
+        diceSummaryTitleStyle = new GUIStyle(GUI.skin.label)
+        {
+            fontSize = 18,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = false
+        };
+        diceSummaryDieStyle = new GUIStyle(GUI.skin.button)
+        {
+            fontSize = 16,
+            fontStyle = FontStyle.Bold,
+            alignment = TextAnchor.MiddleCenter,
+            wordWrap = false,
+            padding = new RectOffset(2, 2, 2, 2)
+        };
     }
 
     private void OnDestroy()
